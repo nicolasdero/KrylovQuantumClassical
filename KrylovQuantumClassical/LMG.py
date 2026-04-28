@@ -250,6 +250,9 @@ class LMG(Hamiltonian):
          array([[-5.00000000e-01-1.43281691e-33j,  1.06057524e-16+5.77350269e-01j],
                 [ 1.06057524e-16-5.77350269e-01j, -5.55555556e-02-8.56462356e-18j]]))
         """
+        if self._matrix is None:
+            raise ValueError("Hamiltonian matrix has not been set.")
+
         U = self.parity_operator()
         E_U, phi_U = la.eigh(U)
 
@@ -272,6 +275,33 @@ class LMG(Hamiltonian):
             return H_m, H_p, E_m, E_p, 
 
         return H_m, H_p
+
+    def level_spacing_ratio(self) -> tuple[float, float]:
+        """
+        This function returns the mean level-spacing ratio of the FP Hamiltonian in the (-, +) and (-, -) symmetry blocks, which are the only two blocks that exhibit Poisson to GOE level-spacing statistics transition as a function of the parameter \lambda.
+
+        Returns
+        -------
+            
+        Example
+        -------
+        >>> print(Jx_Jy_Jz(1/2))
+        (array([[0. , 0.5],[0.5, 0. ]]), array([[0.+0.j , 0.-0.5j],[0.+0.5j, 0.+0.j ]]), array([[ 0.5,  0. ],[ 0. , -0.5]])) # Pauli matrices divided by 2
+        """
+        spectrum_blocks = self.symmetry_blocks(spectrum = True)
+        spectrum_p = spectrum_blocks[2]
+        spectrum_m = spectrum_blocks[3]
+        E_spectrum, _ = la.eigh(self.matrix)
+
+        diff_p = spectrum_p[1 :] - spectrum_p[: - 1]
+        diff_m = spectrum_m[1 :] - spectrum_m[: - 1]
+        diff = E_spectrum[1 :] - E_spectrum[: - 1]
+
+        r_array_mp = np.minimum(diff_p[ : - 1], diff_p[1 : ]) / np.maximum(diff_p[ : - 1], diff_p[1 :])
+        r_array_mm = np.minimum(diff_m[ : - 1], diff_m[1 : ]) / np.maximum(diff_m[ : - 1], diff_m[1 :])
+        r_array = np.minimum(diff[ : - 1], diff[1 : ]) / np.maximum(diff[ : - 1], diff[1 :])
+
+        return r_array, r_array_mp, r_array_mm
 
     def __str__(self) -> str:
         str_1 = f"LMG model with h = {self._h}, J = {self._J}, S = {self._S}."

@@ -256,28 +256,28 @@ class FP(Hamiltonian):
         Returns
         -------
         H_p_p: numpy.ndarray
-            The (+, +) parity block of the FP Hamiltonian.  
+            The (+, +) symmetry block of the FP Hamiltonian.  
 
         H_p_m: numpy.ndarray
-            The (+, -) parity block of the FP Hamiltonian.
+            The (+, -) symmetry block of the FP Hamiltonian.
         
         H_m_p: numpy.ndarray
-            The (-, +) parity block of the FP Hamiltonian.
+            The (-, +) symmetry block of the FP Hamiltonian.
 
         H_m_m: numpy.ndarray
-            The (-, -) parity block of the FP Hamiltonian.
+            The (-, -) symmetry block of the FP Hamiltonian.
 
         E_p_p: numpy.ndarray (only if spectrum is True)
-            The spectrum of the (+, +) parity block of the FP Hamiltonian.
+            The spectrum of the (+, +) symmetry block of the FP Hamiltonian.
 
         E_p_m: numpy.ndarray (only if spectrum is True)
-            The spectrum of the (+, -) parity block of the FP Hamiltonian.
+            The spectrum of the (+, -) symmetry block of the FP Hamiltonian.
 
         E_m_p: numpy.ndarray (only if spectrum is True)
-            The spectrum of the (-, +) parity block of the FP Hamiltonian.
+            The spectrum of the (-, +) symmetry block of the FP Hamiltonian.
 
         E_m_m: numpy.ndarray (only if spectrum is True)
-            The spectrum of the (-, -) parity block of the FP Hamiltonian.
+            The spectrum of the (-, -) symmetry block of the FP Hamiltonian.
 
         Example
         -------
@@ -298,6 +298,9 @@ class FP(Hamiltonian):
         array([[-0.5+0.j, -1. +0.j],
                [-1. +0.j,  2.5+0.j]]))
         """
+        if self._matrix is None:
+            raise ValueError("Hamiltonian matrix has not been set.")
+
         U1 = self.parity_operator()
         U2 = self.exchange_operator()
 
@@ -333,13 +336,13 @@ class FP(Hamiltonian):
 
         dims_blocks = self.blocks_dimension()
         if H_FP_p_p.shape != (dims_blocks[0], dims_blocks[0]):
-            raise ValueError("Dimension of the (+, +) parity block is wrong. Check the implementation of the parity and exchange operators and their spectra.")
+            raise ValueError("Dimension of the (+, +) symmetry block is wrong. Check the implementation of the parity and exchange operators and their spectra.")
         if H_FP_p_m.shape != (dims_blocks[1], dims_blocks[1]):
-            raise ValueError("Dimension of the (+, -) parity block is wrong. Check the implementation of the parity and exchange operators and their spectra.")
+            raise ValueError("Dimension of the (+, -) symmetry block is wrong. Check the implementation of the parity and exchange operators and their spectra.")
         if H_FP_m_p.shape != (dims_blocks[2], dims_blocks[2]):
-            raise ValueError("Dimension of the (-, +) parity block is wrong. Check the implementation of the parity and exchange operators and their spectra.")
+            raise ValueError("Dimension of the (-, +) symmetry block is wrong. Check the implementation of the parity and exchange operators and their spectra.")
         if H_FP_m_m.shape != (dims_blocks[3], dims_blocks[3]):
-            raise ValueError("Dimension of the (-, -) parity block is wrong. Check the implementation of the parity and exchange operators and their spectra.")
+            raise ValueError("Dimension of the (-, -) symmetry block is wrong. Check the implementation of the parity and exchange operators and their spectra.")
 
         if spectrum:
             E_m_m, _ = la.eigh(H_FP_m_m)
@@ -350,6 +353,39 @@ class FP(Hamiltonian):
             return H_FP_p_p, H_FP_p_m, H_FP_m_p, H_FP_m_m, E_p_p, E_p_m, E_m_p, E_m_m   
 
         return H_FP_p_p, H_FP_p_m, H_FP_m_p, H_FP_m_m
+
+    def mean_level_spacing_ratio(self) -> tuple[float, float]:
+        """
+        This function returns the mean level-spacing ratio of the FP Hamiltonian in the (-, +) and (-, -) symmetry blocks, which are the only two blocks that exhibit Poisson to GOE level-spacing statistics transition as a function of the parameter \lambda.
+
+        Returns
+        -------
+        mean_r_mp: float
+            The mean level-spacing ratio of the (-, +) symmetry block of the FP Hamiltonian
+
+        mean_r_mm: float
+            The mean level-spacing ratio of the (-, -) symmetry block of the FP Hamiltonian
+            
+        Example
+        -------
+        >>> print(Jx_Jy_Jz(1/2))
+        (array([[0. , 0.5],[0.5, 0. ]]), array([[0.+0.j , 0.-0.5j],[0.+0.5j, 0.+0.j ]]), array([[ 0.5,  0. ],[ 0. , -0.5]])) # Pauli matrices divided by 2
+        """
+        spectrum_blocks = self.symmetry_blocks(spectrum = True)
+
+        spectrum_m_p = spectrum_blocks[6]
+        spectrum_m_m = spectrum_blocks[7]
+
+        diff_mp = spectrum_m_p[1 :] - spectrum_m_p[: - 1]
+        diff_mm = spectrum_m_m[1 :] - spectrum_m_m[: - 1]
+
+        r_array_mp = np.minimum(diff_mp[ : - 1], diff_mp[1 : ]) / np.maximum(diff_mp[ : - 1], diff_mp[1 :])
+        r_array_mm = np.minimum(diff_mm[ : - 1], diff_mm[1 : ]) / np.maximum(diff_mm[ : - 1], diff_mm[1 :])
+        
+        mean_r_mp = np.mean(r_array_mp)
+        mean_r_mm = np.mean(r_array_mm)
+
+        return mean_r_mp, mean_r_mm
 
     def __str__(self) -> str:
         str_1 = f"FP model with a = {self._a}, L = {self._L}."
