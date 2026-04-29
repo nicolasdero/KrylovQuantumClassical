@@ -183,7 +183,7 @@ class LMG(Hamiltonian):
         return dim_p, dim_m
 
     def parity_operator(self) -> np.ndarray:
-        """
+        r"""
         This function constructs the parity operator of the LMG model in the spin-S representation, which is given by $\hat{U} = \exp(-i \pi \hat{S}_x)$. 
         It is a unitary operator that commutes with the Hamiltonian and has eigenvalues + 1 and - 1.
         Its action on the basis states of the spin-S representation, |m>, is given by $\hat{U} |m> = \exp(-i \pi S) |-m>$, where -S <= m <= S.

@@ -164,7 +164,7 @@ class FP(Hamiltonian):
         return dim_p_p, dim_p_m, dim_m_p, dim_m_m
 
     def parity_operator(self) -> np.ndarray:
-        """
+        r"""
         This function constructs the parity operator of the FP model in the spin-(L, L) representation (L must be integer), which is given by $\hat{U} = \exp(-i \pi (\hat{L}_z + \hat{M}_z))$.
         It is a unitary operator that commutes with the Hamiltonian and has eigenvalues + 1 and - 1.
         Its action on the basis states of the spin-(L, L) representation, |m1, m2>, is given by $\hat{U}_1\ket{m_1,m_2}=(- 1)^{2 \left(m_1+m_2 \right)}\ket{m_1,m_2}$, where -L <= m1, m2 <= L.
@@ -206,7 +206,7 @@ class FP(Hamiltonian):
         return U
 
     def exchange_operator(self) -> np.ndarray:
-        """
+        r"""
         This function constructs the exchange operator of the FP model in the spin-(L, L) representation (L must be integer).
         It is a unitary operator that commutes with the Hamiltonian and has eigenvalues + 1 and - 1.
         Its action on the basis states of the spin-(L, L) representation, $\hat{U}_2\ket{m_1,m_2}=\ket{m_2,m_1}$, where -L <= m1, m2 <= L.
