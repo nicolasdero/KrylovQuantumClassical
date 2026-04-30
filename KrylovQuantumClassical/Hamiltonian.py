@@ -11,23 +11,23 @@ class Hamiltonian:
         self._matrix: np.ndarray | None = None
         self._model_type: str | None = None
 
-    def compute_DOE(self, bandwidth: float = 0.025, n_points: int = 600, symmetry_blocks: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
+    def compute_DOS(self, bandwidth: float = 0.025, n_points: int = 600, symmetry_blocks: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray] | tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
         """
-        This function computes the density of states (DOE) of the Hamiltonian matrix using Gaussian kernel density estimation (KDE) to get a smooth curve.
+        This function computes the density of states (DOS) of the Hamiltonian matrix using Gaussian kernel density estimation (KDE) to get a smooth curve.
 
         Parameters
         ----------
         bandwidth: float (optional)
-            The bandwidth parameter for the Gaussian KDE, which controls the smoothness of the resulting DOE curve. 
-            The default value is set to 0.025, which provides smooth enough DOE curves for the models considered in this work.
+            The bandwidth parameter for the Gaussian KDE, which controls the smoothness of the resulting DOS curve. 
+            The default value is set to 0.025, which provides smooth enough DOS curves for the models considered in this work.
 
         n_points: int (optional)
-            The number of points in the energy grid on which the DOE will be evaluated.
-            The default value is set to 600, which provides a good resolution for the DOE curves of the models considered in this work.
+            The number of points in the energy grid on which the DOS will be evaluated.
+            The default value is set to 600, which provides a good resolution for the DOS curves of the models considered in this work.
 
         symmetry_blocks: bool (optional)
-            Whether to compute the DOE separately for each symmetry block of the Hamiltonian. If True, the function will compute the DOE for each symmetry block and return a list of DOE curves and corresponding energy grids. 
-            If False, the function will compute the DOE for the entire Hamiltonian matrix and return a single DOE curve and energy grid. The default value is False.
+            Whether to compute the DOS separately for each symmetry block of the Hamiltonian. If True, the function will compute the DOS for each symmetry block and return a list of DOS curves and corresponding energy grids. 
+            If False, the function will compute the DOS for the entire Hamiltonian matrix and return a single DOS curve and energy grid. The default value is False.
 
         Returns
         -------
@@ -35,7 +35,7 @@ class Hamiltonian:
             The energy levels of the Hamiltonian matrix.
 
         E_grid: numpy.ndarray
-            The energy grid on which the DOE is evaluated.
+            The energy grid on which the DOS is evaluated.
 
         rho: numpy.ndarray
             The density of states evaluated on the energy grid E_grid.
@@ -53,7 +53,7 @@ class Hamiltonian:
         -------
         >>> LMG_system = LMG(0.5, 1.0, 10)
         >>> LMG_system.build_intensive()
-        >>> LMG_system.compute_DOE()[0]
+        >>> LMG_system.compute_DOS()[0]
         array([-0.63221589, -0.63218501, -0.55838641, -0.55541005, -0.5120225 ,
                -0.48635395, -0.4474792 , -0.40449729, -0.35671567, -0.30479053,
                -0.24902993, -0.18968105, -0.12694035, -0.06097044,  0.00809079,
@@ -61,7 +61,7 @@ class Hamiltonian:
                 0.48160064])
         """
         if symmetry_blocks:
-            smooth_DOE_list = []
+            smooth_DOS_list = []
             E_grid_list = []
             rho_list = []
 
@@ -69,18 +69,18 @@ class Hamiltonian:
             n_entries = len(E_symmetry_spectrum)
 
             for i in range(int(n_entries / 2), n_entries):
-                smooth_DOE_list.append(gaussian_kde(E_symmetry_spectrum[i], bw_method = bandwidth))
+                smooth_DOS_list.append(gaussian_kde(E_symmetry_spectrum[i], bw_method = bandwidth))
                 E_grid_list.append(np.linspace(min(E_symmetry_spectrum[i]), max(E_symmetry_spectrum[i]), n_points))
-                rho_list.append(smooth_DOE_list[-1](E_grid_list[-1]))
+                rho_list.append(smooth_DOS_list[-1](E_grid_list[-1]))
 
             return list(E_symmetry_spectrum[int(n_entries / 2) :]), E_grid_list, rho_list
 
         else:
             E_spectrum, _ = la.eigh(self.matrix)
-            smooth_DOE = gaussian_kde(E_spectrum, bw_method = bandwidth)
+            smooth_DOS = gaussian_kde(E_spectrum, bw_method = bandwidth)
             
             E_grid = np.linspace(min(E_spectrum), max(E_spectrum), n_points)
-            rho = smooth_DOE(E_grid)
+            rho = smooth_DOS(E_grid)
 
             return E_spectrum, E_grid, rho
     

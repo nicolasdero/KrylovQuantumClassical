@@ -27,6 +27,9 @@ class FP(Hamiltonian):
         self._L = L
         self._E = E
 
+        if self._L <= 0:
+            raise ValueError("L must be a positive integer or half-integer.")
+
     @property
     def a(self) -> float:
         return self._a

@@ -20,8 +20,6 @@ Jz=DiagonalMatrix[Mlist];
 {Jx,Jy,Jz}
 }][[1]]
 
-Commutator[A_,B_]:=A . B-B . A
-
 IP[A_,B_,d_]:=Module[{Aflatten=Flatten[A],Bflatten=Flatten[B]},
 (1/d) ConjugateTranspose[Aflatten] . Bflatten]
 
@@ -31,7 +29,7 @@ b=Table[0,{d^2-d+2}];
 K=0;
 
 KB1=\[Theta]0/Sqrt[IP[\[Theta]0,\[Theta]0,d]];
-A1=Commutator[H,KB1];
+A1 = H . KB1 - KB1 . H;
 b[[1]]=SetPrecision[0,p];
 b[[2]]=Sqrt[IP[A1,A1,d]];
 If[Re[b[[2]]]<=\[CurlyEpsilon],
@@ -39,7 +37,7 @@ K=1;
 Return[{K,{b[[1]],b[[2]]}}],
 KB2=A1/b[[2]];
 Do[
-A2=Commutator[H,KB2]-b[[i]] KB1;
+A2=H . KB2 - KB2 . H-b[[i]] KB1;
 b[[i+1]]=Sqrt[IP[A2,A2,d]];
 K=i;
 
@@ -64,7 +62,6 @@ HLMG = -(J/2)sz . sz-h sx;
 HLMG = SetPrecision[HLMG, p]
 
 f[x_,y_,z_] := Total[Table[ic[[i,1]] x^i + ic[[i,2]] y^i + ic[[i,3]] z^i,{i,1,Length[ic]}]]
-f[x,y,z]
 initialOp = f[sx, sy, sz];
 
 {Kdim, Lanczos} = LanczosAlgo[HLMG, initialOp, 2S+1, 10^(-50), p];

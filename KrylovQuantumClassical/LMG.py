@@ -27,6 +27,9 @@ class LMG(Hamiltonian):
         self._J = J
         self._S = S
 
+        if self._S <= 0:
+            raise ValueError("S must be a positive integer or half-integer.")
+
     @property
     def h(self) -> float:
         return self._h
@@ -277,7 +280,7 @@ class LMG(Hamiltonian):
         return H_m, H_p
 
     def level_spacing_ratio(self) -> tuple[float, float]:
-        """
+        r"""
         This function returns the mean level-spacing ratio of the FP Hamiltonian in the (-, +) and (-, -) symmetry blocks, which are the only two blocks that exhibit Poisson to GOE level-spacing statistics transition as a function of the parameter \lambda.
 
         Returns
