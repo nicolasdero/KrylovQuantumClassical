@@ -27,7 +27,7 @@ class LMG(Hamiltonian):
         self._J = J
         self._S = S
 
-        if self._S <= 0:
+        if S <= 0 or not np.isclose(2 * S, round(2 * S)):
             raise ValueError("S must be a positive integer or half-integer.")
 
     @property
@@ -176,12 +176,9 @@ class LMG(Hamiltonian):
             dim_p = self._S
             dim_m = self._S + 1
 
-        elif self._S % 1 == 0.5:
+        else:
             dim_p = int(self._S + 0.5)
             dim_m = int(self._S + 0.5)
-
-        else:
-            raise ValueError("S must be a non-negative integer or half-integer.")
 
         return dim_p, dim_m
 
@@ -281,10 +278,18 @@ class LMG(Hamiltonian):
 
     def level_spacing_ratio(self) -> tuple[float, float]:
         r"""
-        This function returns the mean level-spacing ratio of the FP Hamiltonian in the (-, +) and (-, -) symmetry blocks, which are the only two blocks that exhibit Poisson to GOE level-spacing statistics transition as a function of the parameter \lambda.
+        This function returns the mean level-spacing ratio of the LMG Hamiltonian of the full spectrum and of the two parity blocks.
 
         Returns
         -------
+        r_array: numpy.ndarray
+            The level-spacing ratio of the full spectrum of the LMG Hamiltonian.
+
+        r_array_p: numpy.ndarray
+            The level-spacing ratio of the spectrum of the (+) parity block of the LMG Hamiltonian.
+
+        r_array_m: numpy.ndarray
+            The level-spacing ratio of the spectrum of the (-) parity block of the LMG Hamiltonian.
             
         Example
         -------
@@ -300,13 +305,14 @@ class LMG(Hamiltonian):
         diff_m = spectrum_m[1 :] - spectrum_m[: - 1]
         diff = E_spectrum[1 :] - E_spectrum[: - 1]
 
-        r_array_mp = np.minimum(diff_p[ : - 1], diff_p[1 : ]) / np.maximum(diff_p[ : - 1], diff_p[1 :])
-        r_array_mm = np.minimum(diff_m[ : - 1], diff_m[1 : ]) / np.maximum(diff_m[ : - 1], diff_m[1 :])
+        r_array_p = np.minimum(diff_p[ : - 1], diff_p[1 : ]) / np.maximum(diff_p[ : - 1], diff_p[1 :])
+        r_array_m = np.minimum(diff_m[ : - 1], diff_m[1 : ]) / np.maximum(diff_m[ : - 1], diff_m[1 :])
         r_array = np.minimum(diff[ : - 1], diff[1 : ]) / np.maximum(diff[ : - 1], diff[1 :])
 
-        return r_array, r_array_mp, r_array_mm
+        return r_array, r_array_p, r_array_m
 
     def __str__(self) -> str:
         str_1 = f"LMG model with h = {self._h}, J = {self._J}, S = {self._S}."
         str_2 = f"Hamiltonian is {self._model_type}." if self._model_type is not None else "Hamiltonian has not been built yet."
+        
         return str_1 + " " + str_2 

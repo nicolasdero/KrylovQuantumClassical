@@ -1,6 +1,5 @@
 import numpy as np
 import scipy.sparse as sp
-import numpy.linalg as la
 from wolframclient.evaluation import WolframLanguageSession
 from wolframclient.language import wl, wlexpr
 
@@ -36,7 +35,9 @@ class KrylovQuantum:
         self._initial_operator = initial_operator
         self._precision = precision
         self._Lanczos = None
+        self._a_coeff = None
         self._K_dim = None
+        self._session = WolframLanguageSession()
 
         if self._model not in ['LMG', 'FP']:
             raise ValueError("Invalid model type. Supported models are 'LMG' and 'FP'.")
@@ -50,15 +51,15 @@ class KrylovQuantum:
         if self._model == 'LMG' and len(self._initial_operator) >= 1:
             for x in self._initial_operator:
                 if type(x) != list:
-                    raise ValueError("For the LMG model, each element in the ic list must be a list of 3 elements, e.g. [[1, 0, 1], [1, 1, 2], [1, 0, 1]].")
+                    raise ValueError("For the LMG model, each element in the initial_operator list must be a list of 3 elements, e.g. [[1, 0, 1], [1, 1, 2], [1, 0, 1]].")
                 elif len(x) != 3:
-                    raise ValueError("For the LMG model, each list in the ic list must be a list of 3 elements, e.g. [[1, 0, 1], [1, 1, 2], [1, 0, 1]].")
+                    raise ValueError("For the LMG model, each list in the initial_operator list must be a list of 3 elements, e.g. [[1, 0, 1], [1, 1, 2], [1, 0, 1]].")
                 else:
                     for y in x:
                         if not isinstance(y, (int, float)):
-                            raise ValueError("For the LMG model, each element in the lists of the ic list must be a float, e.g. [1.1, 0.5, 2.4].")
+                            raise ValueError("For the LMG model, each element in the lists of the initial_operator list must be a float, e.g. [1.1, 0.5, 2.4].")
         if self._model == 'LMG' and len(self._initial_operator) == 0:
-            raise ValueError("For the LMG model, the ic list must contain at least one list of 3 elements, e.g. [[1, 0, 1]].")
+            raise ValueError("For the LMG model, the initial_operator list must contain at least one list of 3 elements, e.g. [[1, 0, 1]].")
         
         if self._model == 'FP' and len(self._param) != 1:
             raise ValueError("For the FP model, the param list must contain exactly 1 element: [a].")
@@ -66,19 +67,19 @@ class KrylovQuantum:
         if self._model == 'FP' and len(self._initial_operator) >= 1:
             for x in self._initial_operator:
                 if type(x) != list:
-                    raise ValueError("For the FP model, each element in the ic list must be a list of 5 elements, e.g. [[1, 1, 2, 0, 1], [1, 0, 1, 1, 2], [1, 3, 1, 3, 3]].")
+                    raise ValueError("For the FP model, each element in the initial_operator list must be a list of 5 elements, e.g. [[1, 1, 2, 0, 1], [1, 0, 1, 1, 2], [1, 3, 1, 3, 3]].")
                 elif len(x) != 5:
-                    raise ValueError("For the FP model, each list in the ic list must be a list of 5 elements, e.g. [[1, 1, 2, 0, 1], [1, 0, 1, 1, 2], [1, 3, 1, 3, 3]].")
+                    raise ValueError("For the FP model, each list in the initial_operator list must be a list of 5 elements, e.g. [[1, 1, 2, 0, 1], [1, 0, 1, 1, 2], [1, 3, 1, 3, 3]].")
                 else:
                     if not isinstance(x[0], (int, float)):
-                        raise ValueError("For the FP model, the first element in the lists of the ic list must be a int or float")
+                        raise ValueError("For the FP model, the first element in the lists of the initial_operator list must be a int or float")
                     if (x[1] and x[3]) not in [0, 1, 2, 3]:
-                        raise ValueError("For the FP model, the second and fourth elements in the lists of the ic list must be eqal to 0, 1, 2, or 3.")
+                        raise ValueError("For the FP model, the second and fourth elements in the lists of the initial_operator list must be eqal to 0, 1, 2, or 3.")
                     if not (isinstance(x[2], int) and isinstance(x[4], int) and x[2] > 0 and x[4] > 0):
-                        raise ValueError("For the FP model, the second and fourth elements in the lists of the ic list must be positive integers.")
+                        raise ValueError("For the FP model, the second and fourth elements in the lists of the initial_operator list must be positive integers.")
                             
         elif self._model == 'FP' and len(self._initial_operator) == 0:           
-            raise ValueError("For the FP model, the ic list must contain at least one list of 5 elements, e.g. [[1, 1, 2, 0, 1]].")
+            raise ValueError("For the FP model, the initial_operator list must contain at least one list of 5 elements, e.g. [[1, 1, 2, 0, 1]].")
         
         if self._model == 'FP' and np.isclose(self._spin_size % 1, 0.5):
             raise ValueError("For the FP model, the spin size L must be an integer.")
@@ -118,6 +119,10 @@ class KrylovQuantum:
             raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
         return self._K_dim
     
+    @property
+    def session(self) -> WolframLanguageSession:
+        return self._session
+    
     def Lanczos_coeff_IT(self):
         """
         This function computes the Lanczos coefficients sequence using the infinite temperature Lanczos algorithm. 
@@ -141,21 +146,19 @@ class KrylovQuantum:
                0.1902364 , 0.27314251, 0.42709741, 0.09318997, 0.17470567,
                0.0377407 , 0.17264257, 0.02627635, 0.13626909])
         """
-        session = WolframLanguageSession()
-
-        session.evaluate(wl.Set(wl.ic, self._initial_operator))
-        session.evaluate(wl.Set(wl.p, self._precision))
+        self.session.evaluate(wl.Set(wl.ic, self._initial_operator))
+        self.session.evaluate(wl.Set(wl.p, self._precision))
 
         if self._model == 'LMG':
-            session.evaluate(wl.Set(wl.S, self._spin_size))
-            session.evaluate(wl.Set(wl.hVal, self._param[0]))
-            session.evaluate(wl.Set(wl.JVal, self._param[1]))
-            result = session.evaluate(wl.Get('LanczosAlgorithmLMG.wl'))
+            self.session.evaluate(wl.Set(wl.S, self._spin_size))
+            self.session.evaluate(wl.Set(wl.hVal, self._param[0]))
+            self.session.evaluate(wl.Set(wl.JVal, self._param[1]))
+            result = self.session.evaluate(wl.Get('LanczosAlgorithmLMG.wl'))
 
         if self._model == 'FP':
-            session.evaluate(wl.Set(wl.L, self._spin_size))
-            session.evaluate(wl.Set(wl.lambdaVal, self._param[0]))
-            result = session.evaluate(wl.Get('LanczosAlgorithmFP.wl'))
+            self.session.evaluate(wl.Set(wl.L, self._spin_size))
+            self.session.evaluate(wl.Set(wl.lambdaVal, self._param[0]))
+            result = self.session.evaluate(wl.Get('LanczosAlgorithmFP.wl'))
 
         K_dim = result[0]
         Lanczos = np.array(result[1], dtype = float)[1 : - 1]
@@ -206,27 +209,25 @@ class KrylovQuantum:
                 0.35951985,  0.25950382,  0.22987454,  0.51995775,  0.39675116,
                 0.55235666,  0.59937055,  0.35184492,  0.14993029])
         """
-        session = WolframLanguageSession()
-
-        session.evaluate(wl.Set(wl.ic, self._initial_operator))
-        session.evaluate(wl.Set(wl.p, self._precision))
-        session.evaluate(wl.Set(wl.energy, E))
-        session.evaluate(wl.Set(wl.deltaE, E_window))
+        self.session.evaluate(wl.Set(wl.ic, self._initial_operator))
+        self.session.evaluate(wl.Set(wl.p, self._precision))
+        self.session.evaluate(wl.Set(wl.energy, E))
+        self.session.evaluate(wl.Set(wl.deltaE, E_window))
         if one_point:
-            session.evaluate(wl.Set(wl.onePoint, 1))
+            self.session.evaluate(wl.Set(wl.onePoint, 1))
         else:
-            session.evaluate(wl.Set(wl.onePoint, 0))
+            self.session.evaluate(wl.Set(wl.onePoint, 0))
 
         if self._model == 'LMG':
-            session.evaluate(wl.Set(wl.S, self._spin_size))
-            session.evaluate(wl.Set(wl.hVal, self._param[0]))
-            session.evaluate(wl.Set(wl.JVal, self._param[1]))
-            result = session.evaluate(wl.Get('LanczosAlgorithmMCLMG.wl'))
+            self.session.evaluate(wl.Set(wl.S, self._spin_size))
+            self.session.evaluate(wl.Set(wl.hVal, self._param[0]))
+            self.session.evaluate(wl.Set(wl.JVal, self._param[1]))
+            result = self.session.evaluate(wl.Get('LanczosAlgorithmMCLMG.wl'))
 
         if self._model == 'FP':
-            session.evaluate(wl.Set(wl.L, self._spin_size))
-            session.evaluate(wl.Set(wl.lambdaVal, self._param[0]))
-            result = session.evaluate(wl.Get('LanczosAlgorithmMCFP.wl'))
+            self.session.evaluate(wl.Set(wl.L, self._spin_size))
+            self.session.evaluate(wl.Set(wl.lambdaVal, self._param[0]))
+            result = self.session.evaluate(wl.Get('LanczosAlgorithmMCFP.wl'))
 
         K_dim = result[0]
         Lanczos = np.array(result[1], dtype = float)[1 : - 1]
@@ -241,10 +242,9 @@ class KrylovQuantum:
         if len(Lanczos) != 0:
             self._Lanczos = Lanczos
             self._K_dim = K_dim
-
-        return a
+            self._a_coeff = a
     
-    def K_complexity(self, t_max, dt, a_coeff = None):
+    def K_complexity(self, t_max, dt):
         """
         Given a Lanczos coefficients sequence (and optionally the a coefficients sequence), this function computes the K-complexity of the system as a function of time by simulating the evolution of the wavefunction in the Krylov basis under the tridiagonal matrix representation of the Liouvillian.
 
@@ -281,12 +281,12 @@ class KrylovQuantum:
         if self._Lanczos is None:
             raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
 
-        if a_coeff is None:
+        if self._a_coeff is None:
             diagonals = [self._Lanczos, self._Lanczos]
             L = sp.diags(diagonals, offsets=[- 1, 1], format='csr')
 
         else:
-            diagonals = [self._Lanczos, a_coeff, self._Lanczos]
+            diagonals = [self._Lanczos, self._a_coeff, self._Lanczos]
             L = sp.diags(diagonals, offsets=[- 1, 0, 1], format='csr')
 
         initial_vec = np.zeros(self._K_dim)
@@ -305,7 +305,7 @@ class KrylovQuantum:
 
         return time_grid, K_C
     
-    def LT_K_complexity(self, a_coeff = None):
+    def LT_K_complexity(self):
         """
         This function computes the late-time saturation value of K-complexity, see Eq. (A.4) in the main text.
 
@@ -332,12 +332,12 @@ class KrylovQuantum:
         if self._Lanczos is None:
             raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
         
-        if a_coeff is None:
+        if self._a_coeff is None:
             L = np.diag(self._Lanczos, -1) + np.diag(self._Lanczos, 1)
         else:
-            L = np.diag(self._Lanczos, -1) + np.diag(a_coeff) + np.diag(self._Lanczos, 1)
+            L = np.diag(self._Lanczos, -1) + np.diag(self._a_coeff) + np.diag(self._Lanczos, 1)
 
-        _, eigvec_L = la.eigh(L)
+        _, eigvec_L = np.linalg.eigh(L)
 
         list_n = np.arange(self._K_dim)
 
@@ -350,3 +350,15 @@ class KrylovQuantum:
         LT_C_K = np.dot(Q_0n, list_n)
 
         return LT_C_K, Q_0n
+    
+    def terminate(self):
+        """
+        This function terminates the Wolfram Language session.
+        """
+        self._session.terminate()
+    
+    def __str__(self):
+        str1 = f"Krylov algorithm is set up for the {self._model} model with spin size {self._spin_size} and parameters (h, J for the LMG model and a for the FP model) {self._param}."
+        str2 = f"The initial operator for the Lanczos algorithm is defined by the list {self._initial_operator}, and the precision for representing the operators in Mathematica is set to {self._precision}."
+
+        return str1 + " " + str2

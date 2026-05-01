@@ -1,5 +1,5 @@
 import numpy as np
-import numpy.linalg as la
+import scipy.linalg as la
 from scipy.stats import gaussian_kde
 
 class Hamiltonian:
@@ -60,6 +60,9 @@ class Hamiltonian:
                 0.08012428,  0.15502573,  0.23270278,  0.31307278,  0.39606127,
                 0.48160064])
         """
+        if self._matrix is None:
+            raise ValueError("Hamiltonian matrix has not been set.")
+        
         if symmetry_blocks:
             smooth_DOS_list = []
             E_grid_list = []

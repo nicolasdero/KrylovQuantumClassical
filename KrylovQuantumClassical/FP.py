@@ -16,7 +16,7 @@ class FP(Hamiltonian):
         a: float
             FP model parameter that controls the relative strength of the two terms in the Hamiltonian
         
-        L: float (L = 1/2, 1, 3/2, 2, 5/2, ...)
+        L: int (L = 1, 2, 3, ...)
             The angular momentum quantum number (L controls both collective spin sizes in the FP model, as we work in the Hilbert space of two collective spins of size L)
 
         E: float (optional)
@@ -27,7 +27,7 @@ class FP(Hamiltonian):
         self._L = L
         self._E = E
 
-        if self._L <= 0:
+        if L <= 0 or not np.isclose(L, round(L)):
             raise ValueError("L must be a positive integer or half-integer.")
 
     @property
@@ -156,9 +156,6 @@ class FP(Hamiltonian):
         >>> FP_system.blocks_dimension()
         (4, 1, 2, 2)
         """
-        if self._L % 1 == 0.5:
-            raise ValueError("L must be an integer.")
-
         dim_p_p = (self.L + 1) ** 2
         dim_p_m = self.L ** 2
         dim_m_p = self.L * (self.L + 1)
@@ -191,9 +188,6 @@ class FP(Hamiltonian):
                [ 0,  0,  0,  0,  0,  0,  0, -1,  0],
                [ 0,  0,  0,  0,  0,  0,  0,  0,  1]])
         """
-        if self._L % 1 == 0.5:
-            raise ValueError("L must be an integer.")
-        
         D = int(2 * self._L + 1)
         M_list = np.arange(self._L, - self._L - 1, - 1)
 
@@ -233,9 +227,6 @@ class FP(Hamiltonian):
                [0, 0, 0, 0, 0, 1, 0, 0, 0],
                [0, 0, 0, 0, 0, 0, 0, 0, 1]])
         """
-        if self._L % 1 == 0.5:
-            raise ValueError("L must be an integer.")
-        
         D = int(2 * self._L + 1)
 
         U = np.zeros((D ** 2, D ** 2), dtype = int)
@@ -312,7 +303,7 @@ class FP(Hamiltonian):
         idx_U2_m = E_U2 < 0
         idx_U2_p = E_U2 > 0
 
-        H_FP_U2 = phi_U2.conj().T @ self._matrix @ phi_U2
+        H_FP_U2 = phi_U2.conj().T @ self.matrix @ phi_U2
         U1_U2 = phi_U2.conj().T @ U1 @ phi_U2
 
         H_FP_U2_m = H_FP_U2[idx_U2_m][:, idx_U2_m]
@@ -358,7 +349,7 @@ class FP(Hamiltonian):
         return H_FP_p_p, H_FP_p_m, H_FP_m_p, H_FP_m_m
 
     def mean_level_spacing_ratio(self) -> tuple[float, float]:
-        """
+        r"""
         This function returns the mean level-spacing ratio of the FP Hamiltonian in the (-, +) and (-, -) symmetry blocks, which are the only two blocks that exhibit Poisson to GOE level-spacing statistics transition as a function of the parameter \lambda.
 
         Returns
@@ -393,4 +384,5 @@ class FP(Hamiltonian):
     def __str__(self) -> str:
         str_1 = f"FP model with a = {self._a}, L = {self._L}."
         str_2 = f"Hamiltonian is {self._model_type}." if self._model_type is not None else "Hamiltonian has not been built yet."
+        
         return str_1 + " " + str_2 
