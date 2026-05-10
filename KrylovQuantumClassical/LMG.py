@@ -120,6 +120,31 @@ class LMG(Hamiltonian):
         self._model_type = "intensive"
         
         return H
+    
+    def spectral_width(self) -> float:
+        """
+        This function computes the spectral width of the intensive LMG Hamiltonian, which is defined as the difference between the maximum and minimum eigenvalues of the Hamiltonian.
+        The formula is given by Eq. (B.19) in the main text and is computed from the corresponding classical Hamilonian.
+
+        Returns
+        -------
+        width: float
+            The spectral width of the intensive LMG Hamiltonian.
+
+        Example
+        -------
+        >>> LMG_system = LMG(2.0, 1.0, 2)
+        >>> LMG_system.spectral_width()
+        4.0
+        """
+        if self.h < self.J:
+            width = (self._h + self._J) ** 2 / (2 * self._J)
+            return width
+
+        else:
+            width = 2 * self._h
+            return width
+
 
     def magnetization(self, level: int = 0, operator: np.ndarray | None = None) -> complex:
         """
@@ -314,5 +339,5 @@ class LMG(Hamiltonian):
     def __str__(self) -> str:
         str_1 = f"LMG model with h = {self._h}, J = {self._J}, S = {self._S}."
         str_2 = f"Hamiltonian is {self._model_type}." if self._model_type is not None else "Hamiltonian has not been built yet."
-        
+
         return str_1 + " " + str_2 

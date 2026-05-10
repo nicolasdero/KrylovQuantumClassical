@@ -106,7 +106,7 @@ sz = SetPrecision[sz / S, p];
 HLMG = -(J/2) sz . sz - h sx;
 HLMG = SetPrecision[HLMG, p]
 
-f[x_, y_, z_] := Total[Table[ic[[i,1]] x^i + ic[[i,2]] y^i + ic[[i,3]] z^i,{i, 1, Length[ic]}]]
+f[x_,y_,z_] := Total[Table[ic[[i,1]] MatrixPower[x,i] + ic[[i,2]] MatrixPower[y,i]  + ic[[i,3]] MatrixPower[z,i] ,{i,1,Length[ic]}]]
 initialOp = f[sx, sy, sz];
 
 {Kdim, Lanczos} = LanczosAlgo[HLMG, initialOp, 2 S + 1, 10^(-50), p];

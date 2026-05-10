@@ -103,6 +103,33 @@ class FP(Hamiltonian):
         self._model_type = "intensive"
         
         return H
+    
+    def spectral_width(self) -> float:
+        """
+        This function computes the spectral width of the intensive FP Hamiltonian, which is defined as the difference between the maximum and minimum eigenvalues of the Hamiltonian.
+        The formula is given by Eq. (C.17) in the main text and is computed from the corresponding classical Hamilonian.
+
+        Returns
+        -------
+        width: float
+            The spectral width of the intensive FP Hamiltonian.
+
+        Example
+        -------
+        >>> FP_system = FP(0.8, 1)
+        >>> FP_system.spectral_width()  
+        7.2
+        """
+        if - 1. <= self._a < 0.6:
+            width = - (17 * self._a / 2) + 2 / (1 - self._a) + 13 / 2
+            return width
+
+        elif 0.6 <= self._a <= 1.:
+            width = 4. * (1 + self._a)
+            return width
+
+        else:
+            raise ValueError("a must be in the range [-1, 1].")
 
     def magnetization(self, level: int = 0, operator: np.ndarray | None = None) -> complex:
         """
@@ -384,5 +411,5 @@ class FP(Hamiltonian):
     def __str__(self) -> str:
         str_1 = f"FP model with a = {self._a}, L = {self._L}."
         str_2 = f"Hamiltonian is {self._model_type}." if self._model_type is not None else "Hamiltonian has not been built yet."
-        
+
         return str_1 + " " + str_2 

@@ -118,3 +118,58 @@ class Hamiltonian:
         m = np.conj(phi_spectrum[:, level]) @ operator @ phi_spectrum[:, level]
 
         return m
+    
+    def autocorrelation(self, operator, time_grid):
+        """
+        This function returns the autocorrelation function (or two-point function) of a given operator using the infinite-temperature inner product.
+        The operator should not be normalized, as the function will normalize it internally to ensure that the autocorrelation function is properly normalized at time t = 0.
+
+        Parameters
+        ----------
+        operator: numpy.ndarray
+            The operator for which to compute the autocorrelation function.
+
+        time_grid: numpy.ndarray
+            Array of time values at which the autocorrelation function is evaluated. It is more convenient to pass the time grid as an argument to this function, and give the user more control over the time scales (e.g. linear or logarithmic) and the number of points in the time grid.
+
+        Returns
+        -------
+        phi_0_sq: numpy.ndarray
+            The norm squared of the autocorrelation function of the specified operator evaluated at the time values in time_grid, normalized such that phi_0_sq[0] = 1.
+            
+        Example
+        -------
+        >>> FP_system = FP(0.5, 5)
+        >>> FP_system.build_intensive()
+        >>> Lx, Ly, Lz = util.spin_operators(FP_system.L)
+        >>> time_grid = np.linspace(0, 1, 11)
+        >>> FP_system.autocorrelation(np.kron(Lx, Lx), time_grid)
+        array([1.        +0.00000000e+00j, 0.99820152-4.21680019e-35j,
+               0.99282428+1.02141977e-34j, 0.98392262-1.04639625e-34j,
+               0.97158617-4.94760343e-35j, 0.95593846+7.98047728e-35j,
+               0.93713511+3.55049945e-34j, 0.91536138-5.82806241e-35j,
+               0.89082946-2.03913261e-35j, 0.86377527+7.72261507e-35j,
+               0.83445497+1.90264300e-34j])
+        """
+        if self._matrix is None:
+            raise ValueError("Hamiltonian matrix has not been set.")
+
+        dim = self.matrix.shape[0]
+        
+        E_spectrum, phi_spectrum = la.eigh(self.matrix)
+
+        op_flatten = operator.flatten()
+        op_normalized = operator / np.sqrt(np.vdot(op_flatten, op_flatten) / dim)
+        op_energy_basis = phi_spectrum.conj().T @ op_normalized @ phi_spectrum 
+
+        delta_E = E_spectrum[:, None] - E_spectrum[None, :] 
+        op_sq = np.abs(op_energy_basis) ** 2 
+
+        result = np.zeros_like(time_grid, dtype = np.complex128)
+        for idx, t in enumerate(time_grid):
+            exp_factor_t = np.exp(1j * delta_E * t)
+            result[idx] = np.sum(exp_factor_t * op_sq)
+
+        phi_0 = result / dim
+
+        return phi_0

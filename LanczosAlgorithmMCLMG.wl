@@ -112,9 +112,9 @@ h = SetPrecision[hVal, p];
 J = SetPrecision[JVal, p];
 
 {sx,sy,sz} = JxJyJz[S];
-sx = SparseArray[SetPrecision[sx / S, p]];
-sy = SparseArray[SetPrecision[sy / S, p]];
-sz = SparseArray[SetPrecision[sz / S, p]];
+sx = SetPrecision[sx / S, p];
+sy = SetPrecision[sy / S, p];
+sz = SetPrecision[sz / S, p];
 
 HLMG = -(J/2)sz . sz - h sx;
 HLMG = SparseArray[SetPrecision[HLMG, p]];
@@ -125,7 +125,7 @@ EWindow = ELMG[[idx]];
 nWindow = nLMG[[idx]];
 sizeWindow = Length[EWindow];
 
-f[x_,y_,z_] := Total[Table[ic[[i,1]] x^i + ic[[i,2]] y^i + ic[[i,3]] z^i,{i,1,Length[ic]}]]
+f[x_,y_,z_] := Total[Table[ic[[i,1]] MatrixPower[x,i] + ic[[i,2]] MatrixPower[y,i]  + ic[[i,3]] MatrixPower[z,i] ,{i,1,Length[ic]}]]
 initialOpTransit = f[sx, sy, sz];
 If[onePoint == 1, initialOp = initialOpTransit - IPMC[nWindow, sizeWindow, IdentityMatrix[2 S+1], initialOpTransit, p] IdentityMatrix[2 S + 1], initialOp = initialOpTransit]
  

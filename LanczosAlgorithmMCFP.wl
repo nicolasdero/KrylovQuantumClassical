@@ -111,9 +111,9 @@ Return[{K, Re[b], Re[a]}]]; (* When the initial operator contains s_y, the a and
 \[Lambda] = SetPrecision[lambdaVal, p];
 
 {sx, sy, sz} = JxJyJz[L];
-sx = SparseArray[SetPrecision[sx / L, p]];
-sy = SparseArray[SetPrecision[sy / L, p]];
-sz = SparseArray[SetPrecision[sz / L, p]];
+sx = SetPrecision[sx / L, p];
+sy = SetPrecision[sy / L, p];
+sz = SetPrecision[sz / L, p];
 
 Id = IdentityMatrix[2 L + 1];
 HFP = -(1 + \[Lambda])(KroneckerProduct[sz, Id] + KroneckerProduct[Id, sz]) - 4(1 - \[Lambda])KroneckerProduct[sx, sx];

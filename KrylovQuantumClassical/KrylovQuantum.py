@@ -112,6 +112,12 @@ class KrylovQuantum:
         if self._Lanczos is None:
             raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
         return self._Lanczos
+
+    @property
+    def a_coeff(self) -> bool:
+        if self._a_coeff is None:
+            raise ValueError("a coefficients have not been computed yet. Please run the Lanczos_coeff_MC() method first.")
+        return self._a_coeff
     
     @property
     def K_dim(self) -> int:
