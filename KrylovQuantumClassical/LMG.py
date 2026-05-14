@@ -25,10 +25,11 @@ class LMG(Hamiltonian):
         super().__init__()
         self._h = h
         self._J = J
-        self._S = S
 
         if S <= 0 or not np.isclose(2 * S, round(2 * S)):
             raise ValueError("S must be a positive integer or half-integer.")
+        else:
+            self._S = S
 
     @property
     def h(self) -> float:

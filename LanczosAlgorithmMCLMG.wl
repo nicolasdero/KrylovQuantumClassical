@@ -117,7 +117,7 @@ sy = SetPrecision[sy / S, p];
 sz = SetPrecision[sz / S, p];
 
 HLMG = -(J/2)sz . sz - h sx;
-HLMG = SparseArray[SetPrecision[HLMG, p]];
+HLMG = SetPrecision[HLMG, p];
 {ELMG, nLMG} = Eigensystem[HLMG];
 
 idx = Flatten[Position[ELMG,_?(Between[{energy - deltaE / 2, energy + deltaE / 2}])]]

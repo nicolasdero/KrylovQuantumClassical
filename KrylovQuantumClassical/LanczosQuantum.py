@@ -3,7 +3,7 @@ import scipy.sparse as sp
 from wolframclient.evaluation import WolframLanguageSession
 from wolframclient.language import wl, wlexpr
 
-class KrylovQuantum:
+class LanczosQuantum:
 
     def __init__(self, model: str, spin_size: int, param: list, initial_operator: list, precision: int):
         r"""

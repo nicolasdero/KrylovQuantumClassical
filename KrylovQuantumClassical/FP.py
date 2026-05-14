@@ -24,11 +24,12 @@ class FP(Hamiltonian):
         """
         super().__init__()
         self._a = a
-        self._L = L
         self._E = E
 
         if L <= 0 or not np.isclose(L, round(L)):
             raise ValueError("L must be a positive integer or half-integer.")
+        else:
+            self._L = L
 
     @property
     def a(self) -> float:

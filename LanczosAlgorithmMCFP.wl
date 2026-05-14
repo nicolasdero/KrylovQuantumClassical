@@ -117,7 +117,7 @@ sz = SetPrecision[sz / L, p];
 
 Id = IdentityMatrix[2 L + 1];
 HFP = -(1 + \[Lambda])(KroneckerProduct[sz, Id] + KroneckerProduct[Id, sz]) - 4(1 - \[Lambda])KroneckerProduct[sx, sx];
-HFP = SparseArray[SetPrecision[HFP, p]];
+HFP = SetPrecision[HFP, p];
 {EFP, nFP} = Eigensystem[HFP];
 
 idx = Flatten[Position[EFP,_?(Between[{energy - deltaE / 2, energy + deltaE / 2}])]]
