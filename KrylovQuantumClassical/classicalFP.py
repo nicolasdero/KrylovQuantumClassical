@@ -1,7 +1,9 @@
-from .LanczosClassical import classical_Lanczos_algorithm_njit
+from .LanczosClassical import classical_Lanczos_algorithm, classical_MC_Lanczos_algorithm
 
 import numpy as np
 from numba import njit
+import spherical
+import quaternionic
 
 @njit(inline = "always")
 def L_c_coefficients(l: int, m: int) -> tuple[float, float, float, float, float, float]:
@@ -79,19 +81,19 @@ def vertex_index(l: int, m: int, k: int, n: int, k_block: int) -> int:
     """
     return (l * l + l + m) * k_block + k * (k + 1) + n
 
-@njit(fastmath=True)
-def L_c(grid: np.ndarray, vertex: np.ndarray, c: float, index_current: int, k_max: int, a: float) -> None:
+@njit("void(complex128[:], int64[:], complex128, int64, int64, float64)", fastmath = True)
+def L_c(grid: np.ndarray, vertex: np.ndarray, c: complex, index_current: int, k_max: int, a: float) -> None:
     """
     njited function that defines the action of the classical Liouvillian operator associated with the FP model on a given vertex of the grid. Its anayltical expression is given by Eq. (3.44) in the main text.
     Note: the function modifies the input grid in place.
 
     Parameters
     ----------
-    grid: numpy.ndarray of shape (size_grid,)
-        The grid on which the classical Liouvillian operator acts, where size_grid is the total number of vertices in the grid (see its definition in build_grid() below).
+    grid: numpy.ndarray of shape (size,)
+        The grid on which the classical Liouvillian operator acts, where size is the total number of vertices in the grid (see its definition in build_grid() below).
 
     vertex: numpy.ndarray of shape (4,)
-        The vertex oon which the classical Liouvillian operator acts, defined by the quadruple of integers [l, m, k, n].
+        The vertex on which the classical Liouvillian operator acts, defined by the quadruple of integers [l, m, k, n].
 
     c: float
         The coefficient associated to that vertex.
@@ -107,7 +109,7 @@ def L_c(grid: np.ndarray, vertex: np.ndarray, c: float, index_current: int, k_ma
 
     Example
     -------
-    (see how it is used in the function classical_Lanczos_algorithm_njit() in LanczosClassical.py)
+    (see how it is used in the function LanczosClassical.classical_Lanczos_algorithm_njit())
     """
     l, m, k, n = vertex
 
@@ -251,8 +253,8 @@ def build_grid(l_max: int, k_max: int) -> np.ndarray:
 
     Returns
     -------
-    grid: numpy.ndarray of shape (size_grid, 4)
-        The grid of vertices, where size_grid is the total number of vertices in the grid, given by ((l_max + 1) ** 2) * ((k_max + 1) ** 2).
+    grid: numpy.ndarray of shape (size, 4)
+        The grid of vertices, where size is the total number of vertices in the grid, given by ((l_max + 1) ** 2) * ((k_max + 1) ** 2).
 
     Example
     -------
@@ -280,7 +282,7 @@ def build_grid(l_max: int, k_max: int) -> np.ndarray:
 
 def build_ic(ic: list, b_number: int) -> tuple[np.ndarray, int, int]:
     """
-    Given initial conditions for the classical FP model, this function builds the initial grid. The function also builds the maximum l and k numbers of the vertices in that grid which depend on the initial conditions and the number of Lanczos iterations required.
+    Given initial conditions for the classical FP model, this function builds the initial grid. The function also builds the maximum l and k numbers of the vertices in that grid which depend on the initial conditions and on the number of Lanczos iterations required.
 
     Parameters
     ----------
@@ -292,8 +294,8 @@ def build_ic(ic: list, b_number: int) -> tuple[np.ndarray, int, int]:
 
     Returns
     -------
-    grid: numpy.ndarray of shape (size_grid_ic,)
-        The initial grid, where size_grid_ic is the total number of vertices in the grid, given by ((l_max + 1) ** 2) * ((k_max + 1) ** 2), where l_max and k_max are the maximum l and k numbers of the vertices in the grid.
+    grid: numpy.ndarray of shape (size,)
+        The initial grid, where size is the total number of vertices in the grid, given by ((l_max + 1) ** 2) * ((k_max + 1) ** 2), where l_max and k_max are the maximum l and k numbers of the vertices in the grid.
 
     l_max: int
         The maximum l number of the vertices in the grid.
@@ -309,7 +311,7 @@ def build_ic(ic: list, b_number: int) -> tuple[np.ndarray, int, int]:
             1.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j,
             0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j,
             0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j,
-            0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j]), np.int64(2), p.int64(1))
+            0.+0.j, 0.+0.j, 0.+0.j, 0.+0.j]), np.int64(2), np.int64(1))
     """
     vertices_ic = np.array([v for v, _ in ic], dtype = np.int64)
     coeffs_ic  = np.array([c for _, c in ic], dtype = np.complex128)
@@ -341,12 +343,112 @@ def build_ic(ic: list, b_number: int) -> tuple[np.ndarray, int, int]:
 
     return grid, l_max, k_max
 
+@njit
+def filter_points_FP(a, E, DeltaE, n_samples):
+
+    cos_theta_1 = np.random.uniform(-1.0, 1.0, size = n_samples)
+    cos_theta_2 = np.random.uniform(-1.0, 1.0, size = n_samples)
+    theta_1 = np.arccos(cos_theta_1)
+    theta_2 = np.arccos(cos_theta_2)
+    phi_1 = np.random.uniform(0, 2 * np.pi, size = n_samples)
+    phi_2 = np.random.uniform(0, 2 * np.pi, size = n_samples)
+
+    H = (1 + a) * (np.cos(theta_1) + np.cos(theta_2)) + 4 * (1 - a) * np.sin(theta_1) * np.sin(theta_2) * np.cos(phi_1) * np.cos(phi_2)
+    mask = np.abs(H - E) < DeltaE
+
+    theta_1_filtered = theta_1[mask]
+    phi_1_filtered = phi_1[mask]
+    theta_2_filtered = theta_2[mask]
+    phi_2_filtered = phi_2[mask]
+
+    return theta_1_filtered, phi_1_filtered, theta_2_filtered, phi_2_filtered
+
+def precompute_all_spherical_harmonics(l_max, k_max, a, E, delta_E, n_samples): 
+
+    theta_1, phi_1, theta_2, phi_2 = filter_points_FP(a, E, delta_E, n_samples)
+
+    R_1 = quaternionic.array.from_spherical_coordinates(theta_1, phi_1) 
+    wigner_1 = spherical.Wigner(l_max) 
+    Y_all_1 = wigner_1.sYlm(0, R_1) 
+
+    R_2 = quaternionic.array.from_spherical_coordinates(theta_2, phi_2)
+    wigner_2 = spherical.Wigner(k_max)
+    Y_all_2 = wigner_2.sYlm(0, R_2)
+
+    n_theta_1 = len(theta_1)
+    n_theta_2 = len(theta_2)
+
+    return Y_all_1, Y_all_2, n_theta_1, n_theta_2
+
+@njit
+def grid_idx_map(empty_grid, k_max):
+    size = empty_grid.shape[0]
+    mapping = np.empty(size, dtype = np.int64)
+    for i in range(size):
+        l, m, k, n = empty_grid[i]
+        mapping[i] = vertex_index(l, m, k, n, (k_max + 1) ** 2)
+    return mapping
+
+@njit(fastmath=True)
+def create_IP_mat_FP(empty_grid, grid_to_global_id):
+    """
+    Allocates G using the true maximum boundary of your global tracking IDs
+    """
+    # Find the absolute maximum ID that can be generated by vertex_index
+    max_id = np.max(grid_to_global_id)
+    
+    # Allocate a matrix large enough to safely hold any global ID pair
+    G = np.full((max_id + 1, max_id + 1), -1.0)
+    
+    size = empty_grid.shape[0]
+    for i in range(size):
+        l_i, m_i, k_i, n_i = empty_grid[i]
+        idx_1 = grid_to_global_id[i]
+        
+        for j in range(size):
+            l_j, m_j, k_j, n_j = empty_grid[j]
+            idx_2 = grid_to_global_id[j]
+
+            if (l_i + m_i + k_i + n_i + l_j + m_j + k_j + n_j) % 2 == 1:
+                G[idx_1, idx_2] = 0.0
+                G[idx_2, idx_1] = 0.0
+                
+    return G
+
+@njit(fastmath=True)
+def fast_dot_product(Y_C_tuple, Y_R_tuple, idx_i, idx_j, empty_grid):
+    # 1. Model-specific 4D parity selection rule check
+    l_i, m_i, k_i, n_i = empty_grid[idx_i]
+    l_j, m_j, k_j, n_j = empty_grid[idx_j]
+    
+    if (l_i + m_i + k_i + n_i + l_j + m_j + k_j + n_j) % 2 == 1:
+        return 0.0
+
+    # 2. Compute on-the-fly streaming inner product if parity matches
+    Y1_C, Y2_C = Y_C_tuple
+    Y1_R, Y2_R = Y_R_tuple
+    n_samples = Y1_C.shape[0]
+    accum = 0.0 + 0.0j
+
+    flat_i1 = l_i * (l_i + 1) + m_i
+    flat_i2 = k_i * (k_i + 1) + n_i  # Corrected typo from n_i + 1
+    
+    flat_j1 = l_j * (l_j + 1) + m_j
+    flat_j2 = k_j * (k_j + 1) + n_j
+    
+    for s in range(n_samples):
+        val_i_c = Y1_C[s, flat_i1] * Y2_C[s, flat_i2]
+        val_j_r = Y1_R[s, flat_j1] * Y2_R[s, flat_j2]
+        accum += val_i_c * val_j_r
+        
+    return np.real(accum)
+
 
 class classicalFP():
 
-    def __init__(self, a, ic, b_number):
+    def __init__(self, a: float, ic: list):
         """
-        Constructor for the classical FP class. Given the number of Lanczos coefficients to be computed and the initial conditions, this constructor builds the initial grid containing the initial function. It also initializes an empty grid explicitly containing the vertices [l, m, k, n], both of which are required to execute the classical Lanczos algorithm.
+        Constructor for the classical FP class.
 
         Parameters
         ----------
@@ -355,18 +457,10 @@ class classicalFP():
 
         ic: list
             List containing the initial function (see the precise structure of the list in the function build_ic() above).
-
-        b_number: int
-            The number of Lanczos iterations that will be performed.
         """
         self._a = a
         self._ic = ic
-        self._b_number = b_number
 
-        if self._b_number < 0:
-            raise ValueError("The number of Lanczos iterations must be a non-negative integer.")
-
-        print(type(self._ic))
         if not isinstance(self._ic, list):
             raise ValueError("The initial conditions must be a list.")
         elif self._ic == []:
@@ -381,17 +475,14 @@ class classicalFP():
                 l, m, k, n = vertex
                 if not all(isinstance(x, int) for x in vertex):
                     raise ValueError("The vertex in each element of the initial conditions list must be a list of four integers [l, m, k, n].")
+                if l < 0 or k < 0:
+                    raise ValueError("The l and k numbers of each vertex in the initial conditions list must be non-negative integers.")
                 if abs(m) > l:
                     raise ValueError("The m number of each vertex in the initial conditions list must satisfy -l <= m <= l.")
                 if abs(n) > k:
                     raise ValueError("The n number of each vertex in the initial conditions list must satisfy -k <= n <= k.")
-                if l < 0 or k < 0:
-                    raise ValueError("The l and k numbers of each vertex in the initial conditions list must be non-negative integers.")
                 if not isinstance(coeff, (int, float, complex)):
                     raise ValueError("The coefficient in each element of the initial conditions list must be a number.")
-
-        self._grid_ic, self._lmax, self._kmax = build_ic(self._ic, self._b_number)
-        self._empty_grid = build_grid(self._lmax, self._kmax)
 
     @property
     def a(self):
@@ -401,40 +492,154 @@ class classicalFP():
     def ic(self):
         return self._ic
 
-    @property   
-    def b_number(self):
-        return self._b_number
-
-    @property
-    def grid_ic(self):
-        return self._grid_ic
-
-    @property   
-    def empty_grid(self):
-        return self._empty_grid
-
-    @property
-    def lmax(self):
-        return self._lmax   
-
-    @property
-    def kmax(self):
-        return self._kmax
-
-    def classical_Lanczos_algorithm(self):
+    def Lanczos_coeff_IT(self, b_number):
         """
         Wrapper function that executes the classical Lanczos algorithm for the classical FP model by calling the njited function classical_Lanczos_algorithm_njit() defined in LanczosClassical.py.
+        Given the number of Lanczos coefficients to be computed and the initial conditions, this constructor builds the initial grid containing the initial function. It also initializes an empty grid containing the vertices [l, m, k, n], both of which are required to execute the classical Lanczos algorithm.
+
+        Parameters
+        ----------
+        b_number: int
+            The number of Lanczos iterations that will be performed.
+
+        Returns
+        -------
+        (see LanczosClassical.classical_Lanczos_algorithm_njit())
 
         Example:
         --------
         >>> a = 0.
         >>> ic_zz = [[[1, 0, 1, 0], 1.]]
-        >>> b_number = 20
-        >>> FP_classical = classicalFP(a, ic_zz, b_number)
-        >>> FP_classical.classical_Lanczos_algorithm()
+        >>> FP_classical = classicalFP(a, ic_zz)
+        >>> FP_classical.Lanczos_coeff_IT(20)
         array([ 2.52982213,  3.47233968,  4.72013411,  5.66685709,  6.21286043,
                 7.44283249,  7.4952765 ,  9.58306377,  9.4105079 , 11.11484156,
                 11.3871763 , 12.48841138, 13.29722433, 14.09188443, 15.1276915 ,
                 15.82689119, 16.80241057, 17.59512367, 18.44895755, 19.39593244])
         """
-        return classical_Lanczos_algorithm_njit(self.grid_ic, self.empty_grid, L_c, self.b_number, self.kmax, self.a)
+        if b_number < 0:
+            raise ValueError("The number of Lanczos iterations must be a non-negative integer.")
+        
+        grid_ic, lmax, kmax = build_ic(self._ic, b_number)
+        empty_grid = build_grid(lmax, kmax)
+        return classical_Lanczos_algorithm(grid_ic, empty_grid, L_c, b_number, kmax, self.a)
+    
+    def __str__(self):
+        terms = []
+
+        for (l, m, k, n), coeff in self._ic:
+            term = f"Y_{l}^{m} Z_{k}^{n}"
+            terms.append((coeff, term))
+
+        result = ""
+        for i, (coeff, term) in enumerate(terms):
+            if i == 0:
+                if coeff < 0:
+                    result += f"- {term}"
+                else:
+                    result += f"{term}"
+            else:
+                if coeff < 0:
+                    result += f" - {term}"
+                else:
+                    result += f" + {term}"
+
+        str_1 = f"Classical FP model with parameter a = {self.a}." 
+        str_2 = f"Initial conditions is {result}." 
+        
+        return str_1 + " " + str_2
+
+class classicalFP_MC():
+
+    def __init__(self, a: float, ic: list, E: float, delta_E: float, n_samples: int):
+        """
+        Constructor for the classical and microcanonical LMG class.
+
+        Parameters
+        ----------
+        a: float
+            The parameter a that enters in the definition of the FP model.
+
+        ic: list
+            List containing the initial function (see the precise structure of the list in the function build_ic() above).
+        """
+        self._a = a
+        self._ic = ic
+        self._E = E
+        self._delta_E = delta_E
+        self._n_samples = n_samples
+
+        if not isinstance(self._ic, list):
+            raise ValueError("The initial conditions must be a list.")
+        elif self._ic == []:
+            raise ValueError("The initial conditions cannot be an empty list.")
+        else:
+            for element in self._ic:
+                if not isinstance(element, list) or len(element) != 2:
+                    raise ValueError("Each element of the initial conditions list must be a list of the form [[l, m, k, n], c].")
+                vertex, coeff = element
+                if not isinstance(vertex, list) or len(vertex) != 4:
+                    raise ValueError("The vertex in each element of the initial conditions list must be a list of four integers [l, m, k, n].")
+                l, m, k, n = vertex
+                if not all(isinstance(x, int) for x in vertex):
+                    raise ValueError("The vertex in each element of the initial conditions list must be a list of four integers [l, m, k, n].")
+                if l < 0 or k < 0:
+                    raise ValueError("The l and k numbers of each vertex in the initial conditions list must be non-negative integers.")
+                if abs(m) > l:
+                    raise ValueError("The m number of each vertex in the initial conditions list must satisfy -l <= m <= l.")
+                if abs(n) > k:
+                    raise ValueError("The n number of each vertex in the initial conditions list must satisfy -k <= n <= k.")
+                if not isinstance(coeff, (int, float, complex)):
+                    raise ValueError("The coefficient in each element of the initial conditions list must be a number.")
+                
+        if self._delta_E <= 0:
+            raise ValueError("The energy window delta_E must be a positive number.")
+
+        if self._n_samples <= 0:
+            raise ValueError("The number of samples must be a positive integer.")
+
+    @property
+    def a(self):
+        return self._a
+
+    @property
+    def ic(self):
+        return self._ic 
+    
+    @property
+    def E(self):
+        return self._E
+
+    @property
+    def delta_E(self):
+        return self._delta_E
+
+    @property
+    def n_samples(self):
+        return self._n_samples
+
+    def Lanczos_coeff_MC(self, b_number):
+        if b_number < 0:
+            raise ValueError("The number of Lanczos iterations must be a non-negative integer.")
+
+        grid_ic, lmax, kmax = build_ic(self._ic, b_number)
+        empty_grid = build_grid(lmax, kmax)
+
+        grid_to_global_id = grid_idx_map(empty_grid, kmax)
+
+        Y_all_1, Y_all_2, n_theta, _ = precompute_all_spherical_harmonics(lmax, kmax, self.a, self.E, self.delta_E, self.n_samples)
+        
+        Y_all_R = (np.asfortranarray(Y_all_1), np.asfortranarray(Y_all_2))
+        Y_all_C = (np.asfortranarray(np.conj(Y_all_1)), np.asfortranarray(np.conj(Y_all_2)))
+        
+        G_mat = create_IP_mat_FP(empty_grid, grid_to_global_id)
+        norm_MC = 1.0 / n_theta
+
+        return classical_MC_Lanczos_algorithm(grid_ic, empty_grid, grid_to_global_id, L_c, G_mat, Y_all_C, Y_all_R, norm_MC, b_number, fast_dot_product, kmax, self.a)
+    
+
+#TO DO:
+
+# Add a check for the energy window defined by E and delta_E in the constructor of classicalLMGMC. Do the same in the quantum algorithm.
+# Add string representation for the classicalLMGMC class. It can be the same as the one for classicalLMG, but with an additional sentence that specifies the energy window defined by E and delta_E.
+# Mention possible optimization routes for FP
