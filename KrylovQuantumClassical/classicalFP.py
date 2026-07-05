@@ -8,8 +8,8 @@ import quaternionic
 @njit(inline = "always")
 def L_c_coefficients(l: int, m: int) -> tuple[float, float, float, float, float, float]:
     """
-    njited function that defines the coefficients that enter in the definition of the classical Liouvillian operator associated with the FP model.
-    Note: the function uses the fact that the coefficients of that operator are separable in the l, m and k, n numbers of the vertex.
+    njited function that defines the coefficients appearing in the definition of the classical Liouvillian operator associated with the FP model.
+    Note: the function uses the fact that the coefficients of that operator are separable with respect to the pairs (l, m) and (k, n).
 
     Parameters
     ----------
@@ -22,7 +22,7 @@ def L_c_coefficients(l: int, m: int) -> tuple[float, float, float, float, float,
     Returns
     -------
     (BP, BM, EP, EM, TP, TM): tuple[float, float, float, float, float, float]
-        Tuple that contains the coefficients.
+        Tuple containing the coefficients.
         
     Example
     -------
@@ -84,7 +84,7 @@ def vertex_index(l: int, m: int, k: int, n: int, k_block: int) -> int:
 @njit("void(complex128[:], int64[:], complex128, int64, int64, float64)", fastmath = True)
 def L_c(grid: np.ndarray, vertex: np.ndarray, c: complex, index_current: int, k_max: int, a: float) -> None:
     """
-    njited function that defines the action of the classical Liouvillian operator associated with the FP model on a given vertex of the grid. Its anayltical expression is given by Eq. (3.44) in the main text.
+    njited function that defines the action of the classical Liouvillian operator associated with the FP model on a given vertex of the grid. Its analytical expression is given by Eq. (3.44) in the main text.
     Note: the function modifies the input grid in place.
 
     Parameters
@@ -95,8 +95,8 @@ def L_c(grid: np.ndarray, vertex: np.ndarray, c: complex, index_current: int, k_
     vertex: numpy.ndarray of shape (4,)
         The vertex on which the classical Liouvillian operator acts, defined by the quadruple of integers [l, m, k, n].
 
-    c: float
-        The coefficient associated to that vertex.
+    c: complex
+        The coefficient associated with that vertex.
 
     index_current: int
         The index of that vertex in the grid.
@@ -109,7 +109,7 @@ def L_c(grid: np.ndarray, vertex: np.ndarray, c: complex, index_current: int, k_
 
     Example
     -------
-    (see how it is used in the function LanczosClassical.classical_Lanczos_algorithm_njit())
+    (see how it is used in the function LanczosClassical.classical_Lanczos_algorithm() or in LanczosClassical.classical_MC_Lanczos_algorithm())
     """
     l, m, k, n = vertex
 
@@ -196,13 +196,13 @@ def L_c(grid: np.ndarray, vertex: np.ndarray, c: complex, index_current: int, k_
         m1 = m + 1
         if abs(m1) <= l1:
             idx = vertex_index(l1, m1, k1, n1, k_block)
-            grid[idx] += -c_al * TM_lm * BP_kn
+            grid[idx] += - c_al * TM_lm * BP_kn
 
         l1 = l + 1
         m1 = m - 1
         if abs(m1) <= l1:
             idx = vertex_index(l1, m1, k1, n1, k_block)
-            grid[idx] += -c_al * EM_lm * BP_kn
+            grid[idx] += - c_al * EM_lm * BP_kn
 
         l1 = l - 1
         m1 = m - 1
@@ -287,7 +287,7 @@ def build_ic(ic: list, b_number: int) -> tuple[np.ndarray, int, int]:
     Parameters
     ----------
     ic: list 
-        List containing the initial function decomposed on the spherical harmonics Y_l^m Z_k^n. The list has the structure [[[l_0, m_0, k_0, n_0], c_0], [l_1, m_1, k_1, n_1], c_1], ...] where c_i is the coefficient associated to the vertex defined by the quadruple of integers [l_i, m_i, k_i, n_i].
+        List containing the initial function decomposed in the spherical harmonics basis Y_l^m Z_k^n. The list has the structure [[[l_0, m_0, k_0, n_0], c_0], [[l_1, m_1, k_1, n_1], c_1], ...] where c_i is the coefficient associated to the vertex defined by the quadruple of integers [l_i, m_i, k_i, n_i].
 
     b_number: int
         The number of Lanczos iterations that will be performed.
@@ -331,21 +331,63 @@ def build_ic(ic: list, b_number: int) -> tuple[np.ndarray, int, int]:
     size = ((l_max + 1) ** 2) * k_block
     grid = np.zeros(size, dtype = np.complex128)
 
-    idx_ic = np.empty(n_vertices_ic, np.int64)
-    val_ic = np.empty(n_vertices_ic, dtype=np.complex128)
-
     for i in range(n_vertices_ic):
         l, m, k, n = vertices_ic[i]
         j = vertex_index(l, m, k, n, k_block)
         grid[j] = coeffs_ic[i]
-        idx_ic[i] = j
-        val_ic[i] = coeffs_ic[i]
 
     return grid, l_max, k_max
 
 @njit
-def filter_points_FP(a, E, DeltaE, n_samples):
+def filter_points_FP(a: float, E: float, delta_E: float, n_samples: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    njited function that generates random points on two independent spheres and filters them based on the selected energy shell defined by E and delta_E.
+    The energy is given by the classical FP Hamiltonian, see Eq. (3.40) in the main text.
 
+    Parameters
+    ----------
+    a:float
+        The a parameter of the FP model. 
+
+    E: float
+        The energy value that defines the center of the energy shell.
+
+    delta_E: float
+        The width of the energy shell (Note: the energy shell is defined as the interval [E - delta_E / 2, E + delta_E / 2]).
+
+    n_samples: int
+        The number of random points to be generated on the sphere.
+
+    Returns
+    -------
+    theta_1_filtered: numpy.ndarray
+        The filtered polar angles of the points on the first sphere that lie within the energy shell.
+
+    phi_1_filtered: numpy.ndarray
+        The filtered azimuthal angles of the points on the first sphere that lie within the energy shell.
+
+    theta_2_filtered: numpy.ndarray
+        The filtered polar angles of the points on the second sphere that lie within the energy shell.
+
+    phi_2_filtered: numpy.ndarray
+        The filtered azimuthal angles of the points on the second sphere that lie within the energy shell.
+
+    Example
+    -------
+    >>> a = 0.5
+    >>> E = 0.
+    >>> delta_E = 0.1
+    >>> n_samples = 10 ** 2
+    >>> filter_points_FP(a, E, delta_E, n_samples)
+    (array([0.717399  , 1.15697124, 2.2443017 , 2.60057844, 2.06039503,
+        1.10995783, 2.76619068]),
+     array([4.11990781, 4.40613021, 5.49559289, 2.14966199, 1.61480355,
+        0.57181791, 1.94078367]),
+     array([1.80997926, 1.86850306, 1.08816039, 0.50049511, 1.14444796,
+        1.6005232 , 0.24028026]),
+     array([0.06158231, 5.10545084, 5.02910089, 1.08686358, 1.6019796 ,
+        4.30182836, 0.71700674]))
+    """
     cos_theta_1 = np.random.uniform(-1.0, 1.0, size = n_samples)
     cos_theta_2 = np.random.uniform(-1.0, 1.0, size = n_samples)
     theta_1 = np.arccos(cos_theta_1)
@@ -354,7 +396,7 @@ def filter_points_FP(a, E, DeltaE, n_samples):
     phi_2 = np.random.uniform(0, 2 * np.pi, size = n_samples)
 
     H = (1 + a) * (np.cos(theta_1) + np.cos(theta_2)) + 4 * (1 - a) * np.sin(theta_1) * np.sin(theta_2) * np.cos(phi_1) * np.cos(phi_2)
-    mask = np.abs(H - E) < DeltaE
+    mask = np.abs(H - E) < delta_E / 2
 
     theta_1_filtered = theta_1[mask]
     phi_1_filtered = phi_1[mask]
@@ -363,8 +405,62 @@ def filter_points_FP(a, E, DeltaE, n_samples):
 
     return theta_1_filtered, phi_1_filtered, theta_2_filtered, phi_2_filtered
 
-def precompute_all_spherical_harmonics(l_max, k_max, a, E, delta_E, n_samples): 
+def precompute_all_spherical_harmonics_2(l_max: int, k_max: int, a: float, E: float, delta_E: float, n_samples: int) -> tuple[np.ndarray, np.ndarray, int, int]: 
+    """
+    Given the maximum l and k numbers of both sets of spherical harmonics, the parameters of the classical FP model, and the energy shell defined by E and delta_E, this function precomputes all the spherical harmonics on both spheres for all the points lying within the selected energy shell on the two spheres. (sampled using the function filter_points_FP()).
+    Note that the ordering of the spherical harmonics is given by the ordering of the vertices in the grid, see build_grid() above.
 
+    Parameters
+    ---------- 
+    l_max: int
+        The maximum l number of the spherical harmonics.
+
+    k_max: int
+        The maximum k number of the spherical harmonics.
+    
+    a: float
+        The a parameter of the FP model.
+
+    E: float
+        The energy value that defines the center of the energy shell.
+
+    delta_E: float
+        The width of the energy shell (Note: the energy shell is defined as the interval [E - delta_E / 2, E + delta_E / 2]).
+
+    n_samples: int
+        The number of random points to be generated on the sphere.
+
+    Returns
+    -------
+    Y_all_1: numpy.ndarray of shape (n_theta, (l_max + 1) ** 2)
+        The array containing all the spherical harmonics evaluated at the points of the first sphere lying within the energy shell, where n_theta_1 is the number of points contained in the shell.
+
+    Y_all_2: numpy.ndarray of shape (n_theta, (k_max + 1) ** 2)
+        The array containing all the spherical harmonics evaluated at the points of the second sphere lying within the energy shell, where n_theta_2 is the number of points contained in the shell.
+
+    n_theta_1: int
+        The number of points contained in the first energy shell.
+
+    n_theta_2: int
+        The number of points contained in the second energy shell.
+
+    Example
+    -------
+    >>> l_max = 1
+    >>> k_max = 1
+    >>> a = 0.5
+    >>> E = 0.
+    >>> delta_E = 0.1
+    >>> n_samples = 10 ** 2
+    >>> precompute_all_spherical_harmonics_2(l_max, k_max, a, E, delta_E, n_samples)[1]
+    array([[ 0.28209479+0.j,  0.21665315-0.03190372j, -0.37791473+0.j, -0.21665315-0.03190372j],
+           [ 0.28209479+0.j,  0.27745191-0.17338505j,  0.15699855+0.j, -0.27745191-0.17338505j],
+           [ 0.28209479+0.j, -0.10530046-0.17967933j, -0.38985474+0.j,  0.10530046-0.17967933j],
+           [ 0.28209479+0.j, -0.168637  -0.27660926j, -0.1697945 +0.j,  0.168637  -0.27660926j],
+           [ 0.28209479+0.j,  0.10810111+0.30051883j, -0.18638019+0.j, -0.10810111+0.30051883j],
+           [ 0.28209479+0.j, -0.02914013+0.07516841j,  0.47511424+0.j,  0.02914013+0.07516841j],
+           [ 0.28209479+0.j,  0.19656712-0.0049934j , -0.40175276+0.j, -0.19656712-0.0049934j]])
+    """
     theta_1, phi_1, theta_2, phi_2 = filter_points_FP(a, E, delta_E, n_samples)
 
     R_1 = quaternionic.array.from_spherical_coordinates(theta_1, phi_1) 
@@ -380,58 +476,104 @@ def precompute_all_spherical_harmonics(l_max, k_max, a, E, delta_E, n_samples):
 
     return Y_all_1, Y_all_2, n_theta_1, n_theta_2
 
-@njit
-def grid_idx_map(empty_grid, k_max):
-    size = empty_grid.shape[0]
-    mapping = np.empty(size, dtype = np.int64)
-    for i in range(size):
-        l, m, k, n = empty_grid[i]
-        mapping[i] = vertex_index(l, m, k, n, (k_max + 1) ** 2)
-    return mapping
-
 @njit(fastmath=True)
-def create_IP_mat_FP(empty_grid, grid_to_global_id):
+def create_IP_mat(empty_grid: np.ndarray) -> np.ndarray:
     """
-    Allocates G using the true maximum boundary of your global tracking IDs
+    Function that creates the microcanonical inner product matrix for the classical FP model. The shape of the matrix corresponds to the number of vertices in the grid.
+    Note that at this stage, the matrix is initialized with −1, except for entries forbidden by the parity selection rule, which are initialized to 0. It is later filled with the microcanonical inner products (Y_l^m Z_k^n, Y_l'^m' Z_k'^n')_{E,delta_E}, at position (vertex_index(l, m, k, n, (k_max + 1) ** 2), vertex_index(l', m', k', n', (k_max + 1) ** 2)) in the matrix. 
+    The inner product is zero if the parity selection rule is not satisfied, i.e., if l + m + k + n + l' + m' + k' + n' is odd (not proved in the main text).
+
+    Parameters
+    ----------
+    empty_grid: numpy.ndarray of shape (size, 4)
+        The grid of vertices, where size is the total number of vertices in the grid, given by ((l_max + 1) ** 2) * ((k_max + 1) ** 2).
+
+    Returns
+    -------
+    G: numpy.ndarray of shape ((l_max + 1) ** 2 * (k_max + 1) ** 2, (l_max + 1) ** 2 * (k_max + 1) ** 2)
+        The microcanonical inner product matrix for the classical FP model.
+
+    Example
+    -------
+    >>> empty_grid = build_grid(0, 1)
+    >>> create_IP_mat(empty_grid)
+    array([[-1., -1.,  0., -1.],
+           [-1., -1.,  0., -1.],
+           [ 0.,  0., -1.,  0.],
+           [-1., -1.,  0., -1.]])
     """
-    # Find the absolute maximum ID that can be generated by vertex_index
-    max_id = np.max(grid_to_global_id)
-    
-    # Allocate a matrix large enough to safely hold any global ID pair
-    G = np.full((max_id + 1, max_id + 1), -1.0)
-    
     size = empty_grid.shape[0]
+    G = np.full((size, size), -1.0)
+    
     for i in range(size):
         l_i, m_i, k_i, n_i = empty_grid[i]
-        idx_1 = grid_to_global_id[i]
         
         for j in range(size):
             l_j, m_j, k_j, n_j = empty_grid[j]
-            idx_2 = grid_to_global_id[j]
 
             if (l_i + m_i + k_i + n_i + l_j + m_j + k_j + n_j) % 2 == 1:
-                G[idx_1, idx_2] = 0.0
-                G[idx_2, idx_1] = 0.0
+                G[i, j] = 0.0
+                G[j, i] = 0.0
                 
     return G
 
 @njit(fastmath=True)
-def fast_dot_product(Y_C_tuple, Y_R_tuple, idx_i, idx_j, empty_grid):
-    # 1. Model-specific 4D parity selection rule check
-    l_i, m_i, k_i, n_i = empty_grid[idx_i]
-    l_j, m_j, k_j, n_j = empty_grid[idx_j]
+def dot_product(Y_C_tuple: tuple[np.ndarray, np.ndarray], Y_R_tuple: tuple[np.ndarray, np.ndarray], vertex_i: np.ndarray, vertex_j: np.ndarray) -> float:
+    """
+    njited function that computes the unnormalized microcanonical inner product (Y_l^m Z_k^n, Y_l'^m' Z_k'^n')_{E,delta_E} between the product of spherical harmonics Y_l^m * Z_k^n  and Y_l'^m' * Z_k'^n' using Monte Carlo sampling. The inner product is computed as a sum over the points in the energy shell.
+    The normalization factor is included later in LanczosClassical.IP_MC().
+
+    Parameters
+    ----------  
+    Y_C_tuple: tuple[numpy.ndarray, numpy.ndarray]
+    Tuple containing the conjugated spherical harmonics evaluated at the sampled points in the energy shell.
+        - Y_C_tuple[0] has shape (n_theta, (l_max + 1) ** 2) and contains the conjugated spherical harmonics on the first sphere.
+        - Y_C_tuple[1] has shape (n_theta, (k_max + 1) ** 2) and contains the conjugated spherical harmonics on the second sphere.
+
+    Y_R_tuple: tuple[numpy.ndarray, numpy.ndarray]
+    Tuple containing the spherical harmonics evaluated at the sampled points in the energy shell.
+        - Y_R_tuple[0] has shape (n_theta, (l_max + 1) ** 2) and contains the spherical harmonics on the first sphere.
+        - Y_R_tuple[1] has shape (n_theta, (k_max + 1) ** 2) and contains the spherical harmonics on the second sphere.
+
+    vertex_i: numpy.ndarray of shape (4,)
+        Active vertex in the grid corresponding to [l, m, k, n]. An active vertex corresponds to a vertex over which the classical Liouvillian operator acts.
+
+    vertex_j: numpy.ndarray of shape (4,)
+        Active vertex in the grid corresponding to [l', m', k', n']. An active vertex corresponds to a vertex over which the classical Liouvillian operator acts.
+
+    Returns
+    -------
+    result_dot_product: float
+        The value of the unnormalized microcanonical inner product (Y_l^m Z_k^n, Y_l'^m' Z_k'^n')_{E,delta_E} between the two spherical harmonics Y_l^m * Z_k^n  and Y_l'^m' * Z_k'^n' computed using Monte Carlo sampling.
+
+    Example
+    -------
+    >>> l_max = 1
+    >>> k_max = 1
+    >>> k_block = (k_max + 1) ** 2
+    >>> a = 0.5
+    >>> E = 0.
+    >>> delta_E = 0.1
+    >>> n_samples = 10 ** 2
+    >>> Y_all_1, Y_all_2, n_theta_1, n_theta_2 = KQC.classicalFP.precompute_all_spherical_harmonics_2(l_max, k_max, a, E, delta_E, n_samples)
+    >>> vertex_i = [1, 0, 1, 0]
+    >>> vertex_j = [1, 1, 1, 1]
+    >>> dot_product((np.conj(Y_all_1), np.conj(Y_all_2)), (Y_all_1, Y_all_2), vertex_i, vertex_j)
+    0.00096151985726235
+    """
+    l_i, m_i, k_i, n_i = vertex_i[0], vertex_i[1], vertex_i[2], vertex_i[3]
+    l_j, m_j, k_j, n_j = vertex_j[0], vertex_j[1], vertex_j[2], vertex_j[3]
     
     if (l_i + m_i + k_i + n_i + l_j + m_j + k_j + n_j) % 2 == 1:
         return 0.0
 
-    # 2. Compute on-the-fly streaming inner product if parity matches
     Y1_C, Y2_C = Y_C_tuple
     Y1_R, Y2_R = Y_R_tuple
     n_samples = Y1_C.shape[0]
     accum = 0.0 + 0.0j
 
     flat_i1 = l_i * (l_i + 1) + m_i
-    flat_i2 = k_i * (k_i + 1) + n_i  # Corrected typo from n_i + 1
+    flat_i2 = k_i * (k_i + 1) + n_i 
     
     flat_j1 = l_j * (l_j + 1) + m_j
     flat_j2 = k_j * (k_j + 1) + n_j
@@ -440,8 +582,10 @@ def fast_dot_product(Y_C_tuple, Y_R_tuple, idx_i, idx_j, empty_grid):
         val_i_c = Y1_C[s, flat_i1] * Y2_C[s, flat_i2]
         val_j_r = Y1_R[s, flat_j1] * Y2_R[s, flat_j2]
         accum += val_i_c * val_j_r
+
+    result_dot_product = np.real(accum)
         
-    return np.real(accum)
+    return result_dot_product
 
 
 class classicalFP():
@@ -492,10 +636,10 @@ class classicalFP():
     def ic(self):
         return self._ic
 
-    def Lanczos_coeff_IT(self, b_number):
+    def Lanczos_coeff_IT(self, b_number: int) -> np.ndarray:
         """
-        Wrapper function that executes the classical Lanczos algorithm for the classical FP model by calling the njited function classical_Lanczos_algorithm_njit() defined in LanczosClassical.py.
-        Given the number of Lanczos coefficients to be computed and the initial conditions, this constructor builds the initial grid containing the initial function. It also initializes an empty grid containing the vertices [l, m, k, n], both of which are required to execute the classical Lanczos algorithm.
+        Wrapper function that executes the classical Lanczos algorithm for the classical FP model by calling the njited function classical_Lanczos_algorithm() defined in LanczosClassical.py.
+        Given the number of Lanczos coefficients to be computed and the initial conditions, this method builds the initial grid containing the initial function. It also initializes an empty grid containing the vertices [l, m, k, n], both of which are required to execute the classical Lanczos algorithm.
 
         Parameters
         ----------
@@ -504,10 +648,10 @@ class classicalFP():
 
         Returns
         -------
-        (see LanczosClassical.classical_Lanczos_algorithm_njit())
+        (see LanczosClassical.classical_Lanczos_algorithm())
 
-        Example:
-        --------
+        Example
+        -------
         >>> a = 0.
         >>> ic_zz = [[[1, 0, 1, 0], 1.]]
         >>> FP_classical = classicalFP(a, ic_zz)
@@ -545,7 +689,7 @@ class classicalFP():
                     result += f" + {term}"
 
         str_1 = f"Classical FP model with parameter a = {self.a}." 
-        str_2 = f"Initial conditions is {result}." 
+        str_2 = f"Initial condition is {result}." 
         
         return str_1 + " " + str_2
 
@@ -562,6 +706,15 @@ class classicalFP_MC():
 
         ic: list
             List containing the initial function (see the precise structure of the list in the function build_ic() above).
+
+        E: float
+            The energy value that defines the center of the energy shell.
+
+        delta_E: float
+            The width of the energy shell (Note: the energy shell is defined as the interval [E - delta_E / 2, E + delta_E / 2]).
+
+        n_samples: int
+            The number of random points to be generated on the sphere.
         """
         self._a = a
         self._ic = ic
@@ -594,6 +747,14 @@ class classicalFP_MC():
                 
         if self._delta_E <= 0:
             raise ValueError("The energy window delta_E must be a positive number.")
+        
+        if self._a >= -1 and self._a <= 0.6:
+            E_min = (17 * self._a / 4) - (1 / (1 - self._a)) - (13 / 4)
+            if self._E < E_min or self._E > - E_min:
+                raise ValueError(f"For -1 <= a <= 3/5, the energy E must be in the interval [{E_min}, {-E_min}].")
+        else:
+            if self._E < - 2 * (1 + self._a) or self._E > 2 * (1 + self._a):
+                raise ValueError(f"For 3/5 <= a <= 1, the energy E must be in the interval [{- 2 * (1 + self._a)}, {2 * (1 + self._a)}].")  
 
         if self._n_samples <= 0:
             raise ValueError("The number of samples must be a positive integer.")
@@ -618,28 +779,69 @@ class classicalFP_MC():
     def n_samples(self):
         return self._n_samples
 
-    def Lanczos_coeff_MC(self, b_number):
+    def Lanczos_coeff_MC(self, b_number: int) -> np.ndarray:
+        """
+        Wrapper function that executes the classical microcanonical Lanczos algorithm for the classical FP model by calling the njited function classical_MC_Lanczos_algorithm() defined in LanczosClassical.py.
+        Given the number of Lanczos coefficients to be computed and the initial conditions, this method builds the initial grid containing the initial function. It also initializes an empty grid containing the vertices [l, m, k, n], both of which are required to execute the classical microcanonical Lanczos algorithm.
+
+        Parameters
+        ----------
+        b_number: int
+            The number of Lanczos iterations that will be performed.
+
+        Returns
+        -------
+        (see LanczosClassical.classical_MC_Lanczos_algorithm())
+
+        Example
+        -------
+        >>> a = 0.5
+        >>> ic = [[[1, 0, 1, 0], 1]]
+        >>> E = 0.
+        >>> delta_E = 0.1
+        >>> n_samples = 10 ** 5
+        >>> FP_MC_classical = classicalFP_MC(a, ic, E, delta_E, n_samples)
+        >>> FP_MC_classical.Lanczos_coeff_MC(10)
+        array([0.10014973, 2.41098804, 4.69254532, 5.39095384, 3.55756995, 7.25053814, 6.29358939, 6.99912847, 7.73005671, 8.74035425])
+        """
         if b_number < 0:
             raise ValueError("The number of Lanczos iterations must be a non-negative integer.")
 
         grid_ic, lmax, kmax = build_ic(self._ic, b_number)
         empty_grid = build_grid(lmax, kmax)
 
-        grid_to_global_id = grid_idx_map(empty_grid, kmax)
-
-        Y_all_1, Y_all_2, n_theta, _ = precompute_all_spherical_harmonics(lmax, kmax, self.a, self.E, self.delta_E, self.n_samples)
+        Y_all_1, Y_all_2, n_theta, _ = precompute_all_spherical_harmonics_2(lmax, kmax, self.a, self.E, self.delta_E, self.n_samples)
         
-        Y_all_R = (np.asfortranarray(Y_all_1), np.asfortranarray(Y_all_2))
+        Y_all_R = (np.asfortranarray(Y_all_1), np.asfortranarray(Y_all_2)) # we use the np.asfortranarray() function for better compatibility with njit 
         Y_all_C = (np.asfortranarray(np.conj(Y_all_1)), np.asfortranarray(np.conj(Y_all_2)))
         
-        G_mat = create_IP_mat_FP(empty_grid, grid_to_global_id)
+        G_mat = create_IP_mat(empty_grid)
         norm_MC = 1.0 / n_theta
 
-        return classical_MC_Lanczos_algorithm(grid_ic, empty_grid, grid_to_global_id, L_c, G_mat, Y_all_C, Y_all_R, norm_MC, b_number, fast_dot_product, kmax, self.a)
+        return classical_MC_Lanczos_algorithm(grid_ic, empty_grid, L_c, b_number, G_mat, Y_all_C, Y_all_R, norm_MC, dot_product, kmax, self.a)
     
+    def __str__(self):
+        terms = []
 
-#TO DO:
+        for (l, m, k, n), coeff in self._ic:
+            term = f"Y_{l}^{m} Z_{k}^{n}"
+            terms.append((coeff, term))
 
-# Add a check for the energy window defined by E and delta_E in the constructor of classicalLMGMC. Do the same in the quantum algorithm.
-# Add string representation for the classicalLMGMC class. It can be the same as the one for classicalLMG, but with an additional sentence that specifies the energy window defined by E and delta_E.
-# Mention possible optimization routes for FP
+        result = ""
+        for i, (coeff, term) in enumerate(terms):
+            if i == 0:
+                if coeff < 0:
+                    result += f"- {term}"
+                else:
+                    result += f"{term}"
+            else:
+                if coeff < 0:
+                    result += f" - {term}"
+                else:
+                    result += f" + {term}"
+
+        str_1 = f"Classical FP model with parameter a = {self.a}." 
+        str_2 = f"Initial condition is {result}." 
+        str_3 = f"The energy window is defined by E = {self.E} and delta_E = {self.delta_E}."
+        
+        return str_1 + " " + str_2 + " " + str_3

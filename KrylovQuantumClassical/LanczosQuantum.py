@@ -225,12 +225,33 @@ class LanczosQuantum:
             self.session.evaluate(wl.Set(wl.onePoint, 0))
 
         if self._model == 'LMG':
+            if E_window <= 0:
+                raise ValueError("The energy window E_window must be a positive number.")
+        
+            if self._param[0] <= self._param[1]:
+                if E < - (self._param[0] ** 2 + self._param[1] ** 2) / (2 * self._param[1]) or E > self._param[0]:
+                    raise ValueError(f"For h <= J, the energy E must be in the interval [{-(self._param[0] ** 2 + self._param[1] ** 2) / (2 * self._param[1])}, {self._param[0]}].")
+            else:   
+                if E < - self._param[0] or E > self._param[0]:
+                    raise ValueError(f"For h >= J, the energy E must be in the interval [{- self._param[0]}, {self._param[0]}].")
+                
             self.session.evaluate(wl.Set(wl.S, self._spin_size))
             self.session.evaluate(wl.Set(wl.hVal, self._param[0]))
             self.session.evaluate(wl.Set(wl.JVal, self._param[1]))
             result = self.session.evaluate(wl.Get('LanczosAlgorithmMCLMG.wl'))
 
         if self._model == 'FP':
+            if E_window <= 0:
+                raise ValueError("The energy window delta_E must be a positive number.")
+        
+            if self._param[0] >= -1 and self._param[0] <= 0.6:
+                E_min = (17 * self._param[0] / 4) - (1 / (1 - self._param[0])) - (13 / 4)
+                if E < E_min or E > - E_min:
+                    raise ValueError(f"For -1 <= a <= 3/5, the energy E must be in the interval [{E_min}, {-E_min}].")
+            else:
+                if E < - 2 * (1 + self._param[0]) or E > 2 * (1 + self._param[0]):
+                    raise ValueError(f"For 3/5 <= a <= 1, the energy E must be in the interval [{- 2 * (1 + self._param[0])}, {2 * (1 + self._param[0])}].")  
+
             self.session.evaluate(wl.Set(wl.L, self._spin_size))
             self.session.evaluate(wl.Set(wl.lambdaVal, self._param[0]))
             result = self.session.evaluate(wl.Get('LanczosAlgorithmMCFP.wl'))

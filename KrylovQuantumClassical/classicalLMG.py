@@ -68,7 +68,7 @@ def vertex_index(l: int, m: int) -> int:
 @njit("void(complex128[:], int64[:], complex128, int64, float64, float64)", fastmath = True)
 def L_c(grid: np.ndarray, vertex: np.ndarray, c: complex, index_current: int, h: float, J: float) -> None:
     """
-    njited function that defines the action of the classical Liouvillian operator associated with the LMG model on a given vertex of the grid. Its anayltical expression is given by Eq. (3.41) in the main text.
+    njited function that defines the action of the classical Liouvillian operator associated with the LMG model on a given vertex of the grid. Its analytical expression is given by Eq. (3.39) in the main text.
     Note: the function modifies the input grid in place.
 
     Parameters
@@ -77,10 +77,10 @@ def L_c(grid: np.ndarray, vertex: np.ndarray, c: complex, index_current: int, h:
         The grid on which the classical Liouvillian operator acts, where size is the total number of vertices in the grid (see its definition in build_grid() below).
 
     vertex: numpy.ndarray of shape (2,)
-        The vertex on which the classical Liouvillian operator acts, defined by the quadruple of integers [l, m].
+        The vertex on which the classical Liouvillian operator acts, defined by the pair of integers [l, m].
 
-    c: float
-        The coefficient associated to that vertex.
+    c: complex
+        The coefficient associated with that vertex.
 
     index_current: int
         The index of that vertex in the grid.
@@ -93,7 +93,7 @@ def L_c(grid: np.ndarray, vertex: np.ndarray, c: complex, index_current: int, h:
         
     Example
     -------
-    (see how it is used in the function LanczosClassical.classical_Lanczos_algorithm_njit())
+    (see how it is used in the function LanczosClassical.classical_Lanczos_algorithm() or in LanczosClassical.classical_MC_Lanczos_algorithm())
     """
     l, m = vertex
     C1, C2, C3, C4 = L_c_coefficients(l, m)
@@ -159,14 +159,14 @@ def build_grid(l_max: int) -> np.ndarray:
 
     return grid
 
-def build_ic(ic, b_number):
+def build_ic(ic: list, b_number: int) -> tuple[np.ndarray, int]:
     """
-    Given initial conditions for the classical LMG model, this function builds the initial grid. The function also builds the maximum l number of the vertices in that grid which depend on the initial conditions and on the number of Lanczos iterations required.
+    Given initial conditions for the classical LMG model, this function builds the initial grid. The function also builds the maximum l number of the vertices in that grid which depends on the initial conditions and on the number of Lanczos iterations required.
 
     Parameters
     ----------
     ic: list 
-        List containing the initial function decomposed on the spherical harmonics Y_l^m. The list has the structure [[[l_0, m_0], c_0], [l_1, m_1], c_1], ...] where c_i is the coefficient associated to the vertex defined by the pair of integers [l_i, m_i].
+        List containing the initial function decomposed on the spherical harmonics Y_l^m. The list has the structure [[[l_0, m_0], c_0], [[l_1, m_1], c_1], ...] where c_i is the coefficient associated to the vertex defined by the pair of integers [l_i, m_i].
 
     b_number: int
         The number of Lanczos iterations that will be performed.
@@ -203,21 +203,55 @@ def build_ic(ic, b_number):
     size = ((l_max + 1) ** 2)
     grid = np.zeros(size, dtype = np.complex128)
 
-    idx_ic = np.empty(n_vertices_ic, np.int64)
-    val_ic = np.empty(n_vertices_ic, dtype=np.complex128)
-
     for i in range(n_vertices_ic):
         l, m = vertices_ic[i]
         j = vertex_index(l, m)
         grid[j] = coeffs_ic[i]
-        idx_ic[i] = j
-        val_ic[i] = coeffs_ic[i]
 
     return grid, l_max
 
 @njit
-def filter_points_LMG(h, J, E, delta_E, n_samples):
+def filter_points_LMG(h: float, J: float, E: float, delta_E: float, n_samples: int) -> tuple[np.ndarray, np.ndarray]:
+    """
+    njited function that generates random points on the sphere and filters them based on the selected energy shell defined by E and delta_E. 
+    The energy is given by the classical LMG Hamiltonian, see Eq. (3.38) in the main text.
 
+    Parameters
+    ----------
+    h: float
+        The h parameter of the LMG model.  
+
+    J: float
+        The J parameter of the LMG model.
+
+    E: float
+        The energy value that defines the center of the energy shell.
+
+    delta_E: float
+        The width of the energy shell (Note: the energy shell is defined as the interval [E - delta_E / 2, E + delta_E / 2]).
+
+    n_samples: int
+        The number of random points to be generated on the sphere.
+
+    Returns
+    -------
+    theta_filtered: numpy.ndarray
+        The filtered polar angles of the points that lie within the energy shell.
+
+    phi_filtered: numpy.ndarray
+        The filtered azimuthal angles of the points that lie within the energy shell.
+
+    Example
+    -------
+    >>> h = 0.5
+    >>> J = 1.
+    >>> E = 0.
+    >>> delta_E = 0.1
+    >>> n_samples = 10 ** 2
+    >>> filter_points_LMG(h, J, E, delta_E, n_samples)
+    (array([2.15590292, 0.85595824, 0.65767711, 1.00849223, 1.63762661, 2.24664296, 2.06041061, 0.7672643 ]),
+     array([4.22440124, 2.24897562, 3.17796324, 4.38462869, 4.76000994, 2.05027066, 4.38360706, 3.71587467]))
+    """
     cos_theta = np.random.uniform(-1.0, 1.0, size = n_samples)
     theta = np.arccos(cos_theta)
     phi = np.random.uniform(0, 2 * np.pi, size = n_samples)
@@ -230,8 +264,58 @@ def filter_points_LMG(h, J, E, delta_E, n_samples):
 
     return theta_filtered, phi_filtered
 
-def precompute_all_spherical_harmonics(l_max, h, J, E, delta_E, n_samples): 
+def precompute_all_spherical_harmonics_1(l_max: int, h: float, J: float, E: float, delta_E: float, n_samples: int) -> tuple[np.ndarray, int]: 
+    """
+    Given the maximum l number of the spherical harmonics, the parameters of the classical LMG model, and the energy shell defined by E and delta_E, this function precomputes all the spherical harmonics for all the points that lie within the energy shell (sampled using the function filter_points_LMG()).
+    Note that the ordering of the spherical harmonics is given by the ordering of the vertices in the grid, see build_grid() above.
 
+    Parameters
+    ---------- 
+    l_max: int
+        The maximum l number of the spherical harmonics.
+    
+    h: float
+        The h parameter of the LMG model.  
+
+    J: float
+        The J parameter of the LMG model.
+
+    E: float
+        The energy value that defines the center of the energy shell.
+
+    delta_E: float
+        The width of the energy shell (Note: the energy shell is defined as the interval [E - delta_E / 2, E + delta_E / 2]).
+
+    n_samples: int
+        The number of random points to be generated on the sphere.
+
+    Returns
+    -------
+    Y_all: numpy.ndarray of shape (n_theta, (l_max + 1) ** 2)
+        The array containing all the spherical harmonics evaluated at the points lying within the energy shell, where n_theta is the number of points contained in the shell.
+
+    n_theta: int
+        The number of points contained in the energy shell.
+
+    Example
+    -------
+    >>> l_max = 1
+    >>> h = 0.5
+    >>> J = 1.
+    >>> E = 0.
+    >>> delta_E = 0.1
+    >>> n_samples = 10 ** 2
+    >>> precompute_all_spherical_harmonics_1(l_max, h, J, E, delta_E, n_samples)
+    (array([[ 0.28209479+0.j, -0.20779877-0.02366884j, -0.38891043+0.j,   0.20779877-0.02366884j],
+            [ 0.28209479+0.j, -0.05119343-0.31658299j, -0.18177265+0.j,   0.05119343-0.31658299j],
+            [ 0.28209479+0.j, -0.18297038-0.10451829j, -0.38720531+0.j,   0.18297038-0.10451829j],
+            [ 0.28209479+0.j, -0.09970728+0.26303115j,  0.28368744+0.j,   0.09970728+0.26303115j],
+            [ 0.28209479+0.j,  0.00867739+0.34466379j,  0.03155248+0.j,  -0.00867739+0.34466379j],
+            [ 0.28209479+0.j, -0.08664975+0.27912522j,  0.26056531+0.j,   0.08664975+0.27912522j],
+            [ 0.28209479+0.j,  0.0037707 -0.33962176j, -0.08954387+0.j,  -0.0037707 -0.33962176j],
+            [ 0.28209479+0.j, -0.20859189+0.07526107j,  0.37467694+0.j,   0.20859189+0.07526107j],
+            [ 0.28209479+0.j, -0.05354956+0.2996404j , -0.2311462 +0.j,   0.05354956+0.2996404j]]), 9)
+    """
     theta, phi = filter_points_LMG(h, J, E, delta_E, n_samples) 
     R = quaternionic.array.from_spherical_coordinates(theta, phi) 
     wigner = spherical.Wigner(l_max) 
@@ -241,8 +325,31 @@ def precompute_all_spherical_harmonics(l_max, h, J, E, delta_E, n_samples):
     return Y_all, n_theta
 
 @njit(fastmath=True)
-def create_IP_mat(l_max):
+def create_IP_mat(l_max: int) -> np.ndarray:
+    """
+    Function that creates the microcanonical inner product matrix for the classical LMG model. The shape of the matrix corresponds to the number of vertices in the grid.
+    Note that at this stage, the matrix is initialized with −1, except for entries forbidden by the parity selection rule, which are initialized to 0. It is later filled with the microcanonical inner products (Y_l^m, Y_l'^m')_{E,delta_E}, at position (vertex_index(l, m), vertex_index(l', m')) in the matrix. 
+    The inner product is zero if the parity selection rule is not satisfied, i.e., if l + m + l' + m' is odd, see Eq. (3.45b) in the main text.
 
+    Parameters
+    ----------
+    l_max: int
+        The maximum l number of the vertices in the grid.
+
+    Returns
+    -------
+    G: numpy.ndarray of shape ((l_max + 1) ** 2, (l_max + 1) ** 2)
+        The microcanonical inner product matrix for the classical LMG model.
+
+    Example
+    -------
+    >>> l_max = 1
+    >>> create_IP_mat(l_max)
+    array([[-1., -1.,  0., -1.],
+           [-1., -1.,  0., -1.],
+           [ 0.,  0., -1.,  0.],
+           [-1., -1.,  0., -1.]])
+    """
     G = np.full(((l_max + 1) ** 2, (l_max + 1) ** 2), - 1.0)
 
     for l1 in range(l_max + 1):
@@ -256,34 +363,64 @@ def create_IP_mat(l_max):
 
     return G
 
-@njit
-def grid_idx_map(empty_grid):
-    size = empty_grid.shape[0]
-    mapping = np.empty(size, dtype = np.int64)
-    for i in range(size):
-        l, m = empty_grid[i]
-        mapping[i] = vertex_index(l, m)
-    return mapping
-
 @njit(fastmath=True)
-def fast_dot_product(Y_C_tuple, Y_R_tuple, idx_i, idx_j, empty_grid):
-    # 1. Model-specific parity selection rule check
-    l_i, m_i = empty_grid[idx_i]
-    l_j, m_j = empty_grid[idx_j]
+def dot_product(Y_C_tuple: tuple[np.ndarray], Y_R_tuple: tuple[np.ndarray], vertex_i: np.ndarray, vertex_j: np.ndarray) -> float:
+    """
+    njited function that computes the unnormalized microcanonical inner product (Y_l^m, Y_l'^m')_{E,delta_E} between two spherical harmonics Y_l^m and Y_l'^m' using Monte Carlo sampling. The inner product is computed as a sum over the points in the energy shell.
+    The normalization factor is included later in LanczosClassical.IP_MC().
+
+    Parameters
+    ----------  
+    Y_C_tuple: tuple of numpy.ndarray of shape ((n_theta, (l_max + 1) ** 2), )
+        The tuple containing the array of all the conjugated spherical harmonics evaluated at the points lying within the energy shell, where n_theta is the number of points contained in the shell.
+        Note: the tuple format is required for the function classical_MC_Lanczos_algorithm(), defined in LanczosClassical.py, to be compatible with the FP model, which has two arrays of spherical harmonics (and for further generalizations of the classical models that may require more than one array of spherical harmonics).
+
+    Y_R_tuple: tuple of numpy.ndarray of shape ((n_theta, (l_max + 1) ** 2), )
+        The tuple containing the array of all the spherical harmonics evaluated at the points lying within the energy shell, where n_theta is the number of points contained in the shell.
+        Note: the tuple format is required for the function classical_MC_Lanczos_algorithm(), defined in LanczosClassical.py, to be compatible with the FP model, which has two arrays of spherical harmonics (and for further generalizations of the classical models that may require more than one array of spherical harmonics).
+
+    vertex_i: numpy.ndarray of shape (2,)
+        Active vertex in the grid corresponding to [l, m]. An active vertex corresponds to a vertex over which the classical Liouvillian operator acts.
+
+    vertex_j: numpy.ndarray of shape (2,)
+        Active vertex in the grid corresponding to [l', m']. An active vertex corresponds to a vertex over which the classical Liouvillian operator acts.
+
+    Returns
+    -------
+    result_dot_product: float
+        The value of the unnormalized microcanonical inner product (Y_l^m, Y_l'^m')_{E,delta_E} between the two spherical harmonics Y_l^m and Y_l'^m' computed using Monte Carlo sampling.
+
+    Example
+    -------
+    >>> l_max = 1
+    >>> h = 0.5
+    >>> J = 1.
+    >>> E = 0.
+    >>> delta_E = 0.1
+    >>> n_samples = 10 ** 2
+    >>> Y_all, n_theta = KQC.classicalLMG.precompute_all_spherical_harmonics_1(l_max, h, J, E, delta_E, n_samples)
+    >>> vertex_i = [1, 0]
+    >>> vertex_j = [1, 0]
+    >>> KQC.classicalLMG.dot_product((Y_all,), (Y_all,), vertex_i, vertex_j)
+    0.5434625148197845
+    """
+    l_i, m_i = vertex_i
+    l_j, m_j = vertex_j
     
     if (l_i + m_i + l_j + m_j) % 2 == 1:
         return 0.0
 
-    # 2. Compute inner product if parity matches
     Y_C = Y_C_tuple[0]
     Y_R = Y_R_tuple[0]
     n_samples = Y_C.shape[0]
     accum = 0.0 + 0.0j
     
     for k in range(n_samples):
-        accum += Y_C[k, idx_i] * Y_R[k, idx_j]
+        accum += Y_C[k, l_i * (l_i + 1) + m_i] * Y_R[k, l_j * (l_j + 1) + m_j]
+
+    result_dot_product = np.real(accum)
         
-    return np.real(accum)
+    return result_dot_product
 
 class classicalLMG():
 
@@ -339,10 +476,10 @@ class classicalLMG():
     def ic(self):
         return self._ic 
 
-    def Lanczos_coeff_IT(self, b_number):
+    def Lanczos_coeff_IT(self, b_number: int) -> np.ndarray:
         """
-        Wrapper function that executes the classical Lanczos algorithm for the classical LMG model by calling the njited function classical_Lanczos_algorithm_njit() defined in LanczosClassical.py.
-        Given the number of Lanczos coefficients to be computed and the initial conditions, this constructor builds the initial grid containing the initial function. It also initializes an empty grid containing the vertices [l, m], both of which are required to execute the classical Lanczos algorithm.
+        Wrapper function that executes the classical Lanczos algorithm for the classical LMG model by calling the njited function classical_Lanczos_algorithm() defined in LanczosClassical.py.
+        Given the number of Lanczos coefficients to be computed and the initial conditions, this method builds the initial grid containing the initial function. It also initializes an empty grid containing the vertices [l, m], both of which are required to execute the classical Lanczos algorithm.
 
         Parameters
         ----------
@@ -351,10 +488,10 @@ class classicalLMG():
 
         Returns
         -------
-        (see LanczosClassical.classical_Lanczos_algorithm_njit())
+        (see LanczosClassical.classical_Lanczos_algorithm())
 
-        Example:
-        --------
+        Example
+        -------
         >>> h = 0.5
         >>> J = 1.0
         >>> ic_z = [[[1, 0], 1.]]
@@ -370,6 +507,7 @@ class classicalLMG():
 
         grid_ic, lmax = build_ic(self.ic, b_number)
         empty_grid = build_grid(lmax)
+        
         return classical_Lanczos_algorithm(grid_ic, empty_grid, L_c, b_number, self.h, self.J)
 
     def __str__(self):
@@ -393,7 +531,7 @@ class classicalLMG():
                     result += f" + {term}"
 
         str_1 = f"Classical LMG model with parameters h = {self.h}, J = {self.J}." 
-        str_2 = f"Initial conditions is {result}." 
+        str_2 = f"Initial condition is {result}." 
         
         return str_1 + " " + str_2
     
@@ -413,6 +551,15 @@ class classicalLMG_MC():
 
         ic: list
             List containing the initial function (see the precise structure of the list in the function build_ic() above).
+
+        E: float
+            The energy value that defines the center of the energy shell.
+
+        delta_E: float
+            The width of the energy shell (Note: the energy shell is defined as the interval [E - delta_E / 2, E + delta_E / 2]).
+
+        n_samples: int
+            The number of random points to be generated on the sphere.
         """
         self._h = h
         self._J = J
@@ -444,6 +591,13 @@ class classicalLMG_MC():
                 
         if self._delta_E <= 0:
             raise ValueError("The energy window delta_E must be a positive number.")
+        
+        if self._h <= self._J:
+            if self._E < - (self._h ** 2 + self._J ** 2) / (2 * self._J) or self._E > self._h:
+                raise ValueError(f"For h <= J, the energy E must be in the interval [{-(self._h ** 2 + self._J ** 2) / (2 * self._J)}, {self._h}].")
+        else:   
+            if self._E < - self._h or self._E > self._h:
+                raise ValueError(f"For h >= J, the energy E must be in the interval [{-self._h}, {self._h}].")
 
         if self._n_samples <= 0:
             raise ValueError("The number of samples must be a positive integer.")
@@ -472,27 +626,75 @@ class classicalLMG_MC():
     def n_samples(self):
         return self._n_samples
 
-    def Lanczos_coeff_MC(self, b_number):
+    def Lanczos_coeff_MC(self, b_number: int) -> np.ndarray:
+        """
+        Wrapper function that executes the classical microcanonical Lanczos algorithm for the classical LMG model by calling the njited function classical_MC_Lanczos_algorithm() defined in LanczosClassical.py.
+        Given the number of Lanczos coefficients to be computed and the initial conditions, this method builds the initial grid containing the initial function. It also initializes an empty grid containing the vertices [l, m], both of which are required to execute the classical microcanonical Lanczos algorithm.
+
+        Parameters
+        ----------
+        b_number: int
+            The number of Lanczos iterations that will be performed.
+
+        Returns
+        -------
+        (see LanczosClassical.classical_MC_Lanczos_algorithm())
+
+        Example
+        -------
+        >>> h = 0.5
+        >>> J = 1.
+        >>> ic = [[[1, 0], 1.]]
+        >>> E = 0.
+        >>> delta_E = 0.1
+        >>> n_samples = 10 ** 6
+        >>> LMG_MC_classical = classicalLMG_MC(h, J, ic, E, delta_E, n_samples)
+        >>> LMG_MC_classical.Lanczos_coeff_MC(30)
+        array([0.18414776, 0.64994774, 0.36855749, 2.02432674, 0.49446324,
+               2.69159109, 2.11955158, 1.42456902, 3.52207239, 3.14402934,
+               1.87989065, 4.91640066, 3.28347014, 3.58534432, 4.54161353,
+               5.57944455, 3.03453151, 6.80859407, 4.79935492, 5.70138766,
+               5.46144475, 7.98552504, 4.30567107, 8.5393672 , 6.63497336,
+               7.32492749, 7.14774227, 9.24850865, 7.16752373, 8.18228636])
+        """
         if b_number < 0:
             raise ValueError("The number of Lanczos iterations must be a non-negative integer.")
 
         grid_ic, lmax = build_ic(self._ic, b_number)
         empty_grid = build_grid(lmax)
 
-        grid_to_global_id = grid_idx_map(empty_grid)
-
-        Y_all, n_theta = precompute_all_spherical_harmonics(lmax, self.h, self.J, self.E, self.delta_E, self.n_samples)
+        Y_all, n_theta = precompute_all_spherical_harmonics_1(lmax, self.h, self.J, self.E, self.delta_E, self.n_samples)
         
-        Y_all_R = (np.asfortranarray(Y_all), )
+        Y_all_R = (np.asfortranarray(Y_all), ) # we use the np.asfortranarray() function for better compatibility with njit 
         Y_all_C = (np.asfortranarray(np.conj(Y_all)), )
         
         G_mat = create_IP_mat(lmax)
         norm_MC = 1.0 / n_theta
 
-        return classical_MC_Lanczos_algorithm(grid_ic, empty_grid, grid_to_global_id, L_c, G_mat, Y_all_C, Y_all_R, norm_MC, b_number, fast_dot_product, self.h, self.J)
+        return classical_MC_Lanczos_algorithm(grid_ic, empty_grid, L_c, b_number, G_mat, Y_all_C, Y_all_R, norm_MC, dot_product, self.h, self.J)
     
+    def __str__(self):
+        terms = []
 
-#TO DO:
+        for (l, m), coeff in self._ic:
+            term = f"Y_{l}^{m}"
+            terms.append((coeff, term))
 
-# Add a check for the energy window defined by E and delta_E in the constructor of classicalLMGMC. Do the same in the quantum algorithm.
-# Add string representation for the classicalLMGMC class. It can be the same as the one for classicalLMG, but with an additional sentence that specifies the energy window defined by E and delta_E.
+        result = ""
+        for i, (coeff, term) in enumerate(terms):
+            if i == 0:
+                if coeff < 0:
+                    result += f"- {term}"
+                else:
+                    result += f"{term}"
+            else:
+                if coeff < 0:
+                    result += f" - {term}"
+                else:
+                    result += f" + {term}"
+
+        str_1 = f"Classical LMG model with parameters h = {self.h}, J = {self.J}." 
+        str_2 = f"Initial condition is {result}." 
+        str_3 = f"The energy window is defined by E = {self.E} and delta_E = {self.delta_E}."
+        
+        return str_1 + " " + str_2 + " " + str_3
