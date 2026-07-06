@@ -475,6 +475,31 @@ class classicalLMG():
     @property
     def ic(self):
         return self._ic 
+    
+    def spectral_width(self) -> float:
+        """
+        Computes the spectral width of the classical LMG model, defined as the difference between the maximum and minimum energies of the classical LMG Hamiltonian, see Eq. (B.19) in the main text.
+
+        Returns
+        -------
+        spectral_width: float
+            The spectral width of the classical LMG model.
+
+        Example
+        -------
+        >>> h = 0.5
+        >>> J = 1.
+        >>> ic_z = [[[1, 0], 1.]]
+        >>> LMG_classical = classicalLMG(h, J, [[[1, 0], 1.]])
+        >>> LMG_classical.spectral_width()
+        1.125
+        """
+        if self._h <= self._J:
+            spectral_width =  ((self._h + self._J) ** 2) / (2 * self._J)
+        else:
+            spectral_width = 2 * self._h
+
+        return spectral_width
 
     def Lanczos_coeff_IT(self, b_number: int) -> np.ndarray:
         """
@@ -625,6 +650,17 @@ class classicalLMG_MC():
     @property
     def n_samples(self):
         return self._n_samples
+
+    def spectral_width(self) -> float:
+        """
+        Exact copy of the function in the classicalLMG class. See above for its description.
+        """
+        if self._h <= self._J:
+            spectral_width =  ((self._h + self._J) ** 2) / (2 * self._J)
+        else:
+            spectral_width = 2 * self._h
+
+        return spectral_width
 
     def Lanczos_coeff_MC(self, b_number: int) -> np.ndarray:
         """

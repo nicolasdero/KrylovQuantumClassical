@@ -636,6 +636,30 @@ class classicalFP():
     def ic(self):
         return self._ic
 
+    def spectral_width(self) -> float:
+        """
+        Computes the spectral width of the classical FP model, defined as the difference between the maximum and minimum energies of the classical FP Hamiltonian, see Eq. (C.17) in the main text.
+
+        Returns
+        -------
+        spectral_width: float
+            The spectral width of the classical FP model.
+
+        Example
+        -------
+        >>> a = 0.
+        >>> ic_zz = [[[1, 0, 1, 0], 1.]]
+        >>> FP_classical = classicalFP(a, ic_zz)
+        >>> FP_classical.spectral_width()
+        8.5
+        """
+        if -1 <= self._a and self._a <= 0.6:
+            spectral_width =  (- 17 * self._a / 2) + (2 / (1 - self._a)) + 13 / 2
+        elif 0.6 < self._a and self._a <= 1:
+            spectral_width = 4 * (1 + self._a) 
+
+        return spectral_width
+
     def Lanczos_coeff_IT(self, b_number: int) -> np.ndarray:
         """
         Wrapper function that executes the classical Lanczos algorithm for the classical FP model by calling the njited function classical_Lanczos_algorithm() defined in LanczosClassical.py.
@@ -778,6 +802,17 @@ class classicalFP_MC():
     @property
     def n_samples(self):
         return self._n_samples
+
+    def spectral_width(self) -> float:
+        """
+        Exact copy of the function in the classicalFP class. See above for its description.
+        """
+        if -1 <= self._a and self._a <= 0.6:
+            spectral_width =  (- 17 * self._a / 2) + (2 / (1 - self._a)) + 13 / 2
+        elif 0.6 <= self._a and self._a <= 1:
+            spectral_width = 4 * (1 + self._a) 
+
+        return spectral_width
 
     def Lanczos_coeff_MC(self, b_number: int) -> np.ndarray:
         """
