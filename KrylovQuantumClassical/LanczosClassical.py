@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.sparse as sp
 from numba import njit
 
 @njit
@@ -287,3 +288,67 @@ def classical_MC_Lanczos_algorithm(grid_ic: np.ndarray, empty_grid: np.ndarray, 
         idx, val = extract_nonzero(grid_1)
 
     return lanczos
+
+def K_complexity(t_max, dt, Lanczos, check = False):
+        """
+        Given a Lanczos coefficients sequence, this function computes the corresponding K-complexity as a function of time by computing the evolution of the wavefunction in the Krylov basis under the tridiagonal matrix representation of the Liouvillian.
+        Note 1: we use the fact that for classical systems, the a_n coefficients vanish (see a proof in the main text)
+        Note 2: in the LacnzosQuantum class, the K-complexity is computed upon acting with a method on the LanczosQuantum object, while here we compute the K-complexity directly from the Lanczos coefficients sequence. This is because in the classical framework, the Lanczos coefficients are not attributes of a class, but rather computed directly from the initial function and the classical Liouvillian operator.
+
+        Parameters
+        ----------
+        t_max: float
+            Maximum time up to which to compute the K-complexity
+
+        dt: float
+            Time step for the evolution
+
+        Lanczos: numpy.ndarray
+            The Lanczos coefficients sequence, which is a 1D array of length equal to the number of Lanczos iterations performed.
+
+        check: bool (optional)
+            If True, checks that the wavefunction is normalized at all times. If the check fails, raises a ValueError.
+
+        Returns
+        -------
+        time_grid: numpy.ndarray (of shape (int(t_max / dt) + 1,))
+            The grid of time points at which the classical K-complexity is computed, which ranges from 0 to t_max with a step of dt.
+
+        K_C: numpy.ndarray (of shape (int(t_max / dt) + 1,))
+            The classical K-complexity of the system at each time point in the time grid, which is computed as the expectation value of the position operator in the Krylov basis with respect to the evolved wavefunction.
+            
+        Example
+        -------
+        >>> h = 0.5
+        >>> J = 1.
+        >>> ic_z = [[[1, 0], 1.]]
+        >>> LMG_classical = classicalLMG(h, J, ic_z)
+        >>> classical_Lanczos_LMG = LMG_classical.Lanczos_coeff_IT(250)
+        >>> K_complexity(2, 0.1, classical_Lanczos_LMG, True)
+        (array([0. , 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1. , 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2. ]),
+         array([0.        , 0.00249875, 0.00998005, 0.02239931, 0.03968317,
+                0.06173084, 0.08841607, 0.11958965, 0.15508233, 0.19470828,
+                0.23826899, 0.28555733, 0.33636198, 0.3904719 , 0.44768078,
+                0.50779134, 0.57061946, 0.63599792, 0.70377981, 0.77384143,
+                0.84608487]))
+        """
+        diagonals = [Lanczos, Lanczos]
+        L = sp.diags(diagonals, offsets=[- 1, 1], format='csr')
+        K_dim_truncated = len(Lanczos) + 1
+
+        initial_vec = np.zeros(K_dim_truncated)
+        initial_vec[0] = 1
+
+        n_points = int(t_max / dt) + 1
+        time_grid = np.linspace(0, t_max, n_points)
+        K_wf = sp.linalg.expm_multiply(1j * L, initial_vec, start = 0, stop = t_max, num = n_points, endpoint = True)
+        abs_K_wf = np.abs(K_wf) ** 2
+
+        if check:
+            if not np.allclose(np.sum(abs_K_wf, axis = 1), 1):
+                raise ValueError("The wavefunction is not normalized at all times.")
+        
+        n_vals = np.arange(K_dim_truncated)
+        K_C = abs_K_wf @ n_vals 
+
+        return time_grid, K_C
