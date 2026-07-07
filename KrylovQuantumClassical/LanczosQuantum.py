@@ -108,13 +108,13 @@ class LanczosQuantum:
         return self._precision
     
     @property   
-    def Lanczos(self) -> bool:
+    def Lanczos(self):
         if self._Lanczos is None:
             raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
         return self._Lanczos
 
     @property
-    def a_coeff(self) -> bool:
+    def a_coeff(self):
         if self._a_coeff is None:
             raise ValueError("a coefficients have not been computed yet. Please run the Lanczos_coeff_MC() method first.")
         return self._a_coeff
@@ -128,6 +128,14 @@ class LanczosQuantum:
     @property
     def session(self) -> WolframLanguageSession:
         return self._session
+    
+    @Lanczos.setter
+    def Lanczos(self, value):
+        """
+        Setter to manually set or replace the Lanczos coefficients.
+        This can be useful for rescaling the Lanczos coefficients (for example by the spectral width).
+        """
+        self._Lanczos = value
     
     def Lanczos_coeff_IT(self):
         """
@@ -271,7 +279,7 @@ class LanczosQuantum:
             self._K_dim = K_dim
             self._a_coeff = a
     
-    def K_complexity(self, t_max, dt):
+    def K_complexity(self, t_max, dt, check = False):
         """
         Given a Lanczos coefficients sequence (and optionally the a coefficients sequence), this function computes the K-complexity of the system as a function of time by simulating the evolution of the wavefunction in the Krylov basis under the tridiagonal matrix representation of the Liouvillian.
 
@@ -286,6 +294,9 @@ class LanczosQuantum:
         a_coeff: numpy.ndarray (of shape (self._K_dim,), optional)
             The a coefficients of the Lanczos algorithm, if any.
 
+        check: bool (optional)
+            If True, checks that the wavefunction is normalized at all times. If the check fails, raises a ValueError.
+
         Returns
         -------
         time_grid: numpy.ndarray (of shape (int(t_max / dt) + 1,))
@@ -298,7 +309,7 @@ class LanczosQuantum:
         -------
         >>> LMG_Lanczos = KrylovQuantum(model = 'LMG', spin_size = 4, param = [0.5, 1.0], initial_operator = [[1, 0, 1]], precision = 500)
         >>> LMG_Lanczos.Lanczos_coeff_IT()
-        >>> LMG_Lanczos.K_complexity(t_max = 10, dt = 0.5)[1]
+        >>> LMG_Lanczos.K_complexity(t_max = 10, dt = 0.5, True)[1]
         array([0.        , 0.00383548, 0.01537135, 0.03469374, 0.06193947,
                0.097287  , 0.14094577, 0.19314543, 0.25412647, 0.32413356,
                0.40341211, 0.49220851, 0.59077337, 0.69936686, 0.81826471,
@@ -310,11 +321,11 @@ class LanczosQuantum:
 
         if self._a_coeff is None:
             diagonals = [self._Lanczos, self._Lanczos]
-            L = sp.diags(diagonals, offsets=[- 1, 1], format='csr')
+            L = sp.diags(diagonals, offsets = [- 1, 1], format='csr')
 
         else:
             diagonals = [self._Lanczos, self._a_coeff, self._Lanczos]
-            L = sp.diags(diagonals, offsets=[- 1, 0, 1], format='csr')
+            L = sp.diags(diagonals, offsets = [- 1, 0, 1], format='csr')
 
         initial_vec = np.zeros(self._K_dim)
         initial_vec[0] = 1
@@ -324,8 +335,9 @@ class LanczosQuantum:
         K_wf = sp.linalg.expm_multiply(1j * L, initial_vec, start = 0, stop = t_max, num = n_points, endpoint = True)
         abs_K_wf = np.abs(K_wf) ** 2
 
-        if not np.allclose(np.sum(abs_K_wf, axis = 1), 1):
-            raise ValueError("The wavefunction is not normalized at all times.")
+        if check:
+            if not np.allclose(np.sum(abs_K_wf, axis = 1), 1):
+                raise ValueError("The wavefunction is not normalized at all times.")
         
         n_vals = np.arange(self._K_dim)
         K_C = abs_K_wf @ n_vals 

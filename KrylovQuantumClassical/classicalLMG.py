@@ -1,8 +1,8 @@
 from .LanczosClassical import extract_nonzero, classical_Lanczos_algorithm, classical_MC_Lanczos_algorithm
 
 import numpy as np
-from numba import njit, types
-from numba.typed import Dict
+from numba import njit
+import scipy.special as spc
 import spherical
 import quaternionic
 
@@ -236,10 +236,10 @@ def filter_points_LMG(h: float, J: float, E: float, delta_E: float, n_samples: i
     Returns
     -------
     theta_filtered: numpy.ndarray
-        The filtered polar angles of the points that lie within the energy shell.
+        The filtered polar angles of the points lying within the energy shell.
 
     phi_filtered: numpy.ndarray
-        The filtered azimuthal angles of the points that lie within the energy shell.
+        The filtered azimuthal angles of the points lying within the energy shell.
 
     Example
     -------
@@ -627,6 +627,26 @@ class classicalLMG_MC():
         if self._n_samples <= 0:
             raise ValueError("The number of samples must be a positive integer.")
 
+        IP_ic = 0
+        for i, x in enumerate(self._ic):
+            l_i, m_i = x[0]
+            coeff_1 = x[1]
+            for j, y in enumerate(self._ic):
+                l_j, m_j = y[0]
+                coeff_2 = y[1]
+                if (l_i + m_i + l_j + m_j) % 2 == 1:
+                    IP_ic += 0
+                else:
+                    IP_ic += self.microcananical_IP(l_i, m_i, l_j, m_j) * np.conj(coeff_1) * coeff_2
+        
+        new_ic = []
+        for i, x in enumerate(self._ic):
+            l_i, m_i = x[0]
+            coeff_1 = x[1]
+            new_ic.append([[l_i, m_i], coeff_1 / np.sqrt(IP_ic)])
+
+        self._ic = new_ic
+
     @property
     def h(self):
         return self._h
@@ -661,6 +681,50 @@ class classicalLMG_MC():
             spectral_width = 2 * self._h
 
         return spectral_width
+
+    def microcananical_IP(self, l1: int, m1: int, l2: int, m2: int) -> float:
+        """
+        This fuction computes the microcanonical inner product (Y_l^m, Y_l'^m')_{E,delta_E} between two spherical harmonics Y_l^m and Y_l'^m' using Monte Carlo sampling.
+        Note: the function filter_points_LMG() is called within this function to generate random points on the sphere and filter them based on the selected energy shell defined by E and delta_E. As a consequence, this Monte Carlo is statistically independent from the Monte Carlo used in the Lanczos algorithm, which is executed in the function Lanczos_coeff_MC().
+
+        Parameters
+        ----------
+        l1: int
+            The l number of the first spherical harmonic Y_l^m.
+        
+        m1: int
+            The m number of the first spherical harmonic Y_l^m.
+
+        l2: int
+            The l number of the second spherical harmonic Y_l'^m'.
+
+        m2: int
+            The m number of the second spherical harmonic Y_l'^m'.
+
+        Returns
+        -------
+        IP: float
+            The value of the microcanonical inner product (Y_l^m, Y_l'^m')_{E,delta_E} between the two spherical harmonics Y_l^m and Y_l'^m' computed using Monte Carlo sampling.
+
+        Example
+        -------
+        >>> h = 0.5
+        >>> J = 1.
+        >>> E = 0.
+        >>> delta_E = 0.1
+        >>> n_samples = 10 ** 6
+        >>> LMG_MC_classical = classicalLMG_MC(h, J, [[[1, 0], 1.]], E, delta_E, n_samples)
+        >>> LMG_MC_classical.microcananical_IP(1, 0, 1, 0)
+        0.07068958819668766
+        """
+        if (l1 + l2 + m1 + m2) % 2 == 1:
+            IP = 0.0
+        else:
+            theta, phi = filter_points_LMG(self.h, self.J, self.E, self.delta_E, self.n_samples)
+            Y_product = np.conj(spc.sph_harm_y(l1, m1, theta, phi)) * spc.sph_harm_y(l2, m2, theta, phi)
+            IP = np.real(np.sum(Y_product)) / len(theta)
+
+        return IP
 
     def Lanczos_coeff_MC(self, b_number: int) -> np.ndarray:
         """

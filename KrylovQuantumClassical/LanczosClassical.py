@@ -162,7 +162,7 @@ def IP_MC(grid_1: np.ndarray, empty_grid: np.ndarray, G_mat: np.ndarray, Y_C_tup
     idx, val = extract_nonzero(grid_1)
     n_active = len(idx)
     if n_active == 0:
-        return 0.0
+        return 0.0, G_mat
 
     for i in range(n_active):
         idx_i = idx[i]
@@ -193,7 +193,7 @@ def IP_MC(grid_1: np.ndarray, empty_grid: np.ndarray, G_mat: np.ndarray, Y_C_tup
     norm_sq *= norm_MC
     norm = np.sqrt(norm_sq)
 
-    return norm
+    return norm, G_mat
 
 @njit
 def classical_MC_Lanczos_algorithm(grid_ic: np.ndarray, empty_grid: np.ndarray, L_c: callable, b_number: int, G_mat: np.ndarray, Y_C_tuple: tuple[np.ndarray, np.ndarray, ...], Y_R_tuple: tuple[np.ndarray, np.ndarray, ...], norm_MC: float, dot_product: callable, *params) -> np.ndarray:
@@ -269,7 +269,7 @@ def classical_MC_Lanczos_algorithm(grid_ic: np.ndarray, empty_grid: np.ndarray, 
         if it > 0:
             grid_1 -= lanczos[it - 1] * grid_0
 
-        norm = IP_MC(grid_1, empty_grid, G_mat, Y_C_tuple, Y_R_tuple, norm_MC, dot_product)
+        norm, G_mat = IP_MC(grid_1, empty_grid, G_mat, Y_C_tuple, Y_R_tuple, norm_MC, dot_product)
         
         lanczos[it] = norm
 
