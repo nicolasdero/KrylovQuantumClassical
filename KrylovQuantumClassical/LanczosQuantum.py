@@ -1,7 +1,8 @@
 import numpy as np
 import scipy.sparse as sp
+from scipy.linalg import eigh_tridiagonal
 from wolframclient.evaluation import WolframLanguageSession
-from wolframclient.language import wl, wlexpr
+from wolframclient.language import wl
 
 class LanczosQuantum:
 
@@ -23,7 +24,7 @@ class LanczosQuantum:
 
         initial_operator: list
             A list of lists that define the initial operator for the Lanczos algorithm. 
-            For the LMG model, each inner list must contain exactly 3 elements: [coefficient 1, coefficient 2, coefficient 3], where the coefficients of the ith list correspond to the operators S_x^i, S_y^i, and S_z^i, respectively.
+            For the LMG model, each inner list must contain exactly 3 elements: [coefficient, operator, power], which represents the operator coefficient * (operator)^power, where the operator can be either S_x, S_y, or S_z. All operators constructed from each inner list of the initial_operator list will be summed together to form the initial operator for the Lanczos algorithm.
             For the FP model, each inner list must contain exactly 5 elements: [coefficient, operator 1, power 1, operator 2, power 2], which represents the operator coefficient * (operator 1)^power 1 \otimes (operator 2)^power 2, where the operators can be either S_x, S_y, or S_z. All operators constructed from each inner list of the initial_operator list will be summed together to form the initial operator for the Lanczos algorithm.
 
         precision: int
@@ -55,9 +56,13 @@ class LanczosQuantum:
                 elif len(x) != 3:
                     raise ValueError("For the LMG model, each list in the initial_operator list must be a list of 3 elements, e.g. [[1, 0, 1], [1, 1, 2], [1, 0, 1]].")
                 else:
-                    for y in x:
-                        if not isinstance(y, (int, float)):
-                            raise ValueError("For the LMG model, each element in the lists of the initial_operator list must be a float, e.g. [1.1, 0.5, 2.4].")
+                    if not isinstance(x[0], (int, float)):
+                        raise ValueError("For the LMG model, the first element in the lists of the initial_operator list must be a float or integer.")
+                    if x[1] not in [0, 1, 2, 3]:
+                        raise ValueError("For the LMG model, the second element in the lists of the initial_operator list must be equal to 0, 1, 2, or 3.")
+                    if not isinstance(x[2], int):
+                        raise ValueError("For the LMG model, the third element in the lists of the initial_operator list must be an integer.")
+                        
         if self._model == 'LMG' and len(self._initial_operator) == 0:
             raise ValueError("For the LMG model, the initial_operator list must contain at least one list of 3 elements, e.g. [[1, 0, 1]].")
         
@@ -74,7 +79,7 @@ class LanczosQuantum:
                     if not isinstance(x[0], (int, float)):
                         raise ValueError("For the FP model, the first element in the lists of the initial_operator list must be a int or float")
                     if (x[1] and x[3]) not in [0, 1, 2, 3]:
-                        raise ValueError("For the FP model, the second and fourth elements in the lists of the initial_operator list must be eqal to 0, 1, 2, or 3.")
+                        raise ValueError("For the FP model, the second and fourth elements in the lists of the initial_operator list must be equal to 0, 1, 2, or 3.")
                     if not (isinstance(x[2], int) and isinstance(x[4], int) and x[2] > 0 and x[4] > 0):
                         raise ValueError("For the FP model, the second and fourth elements in the lists of the initial_operator list must be positive integers.")
                             
@@ -110,7 +115,7 @@ class LanczosQuantum:
     @property   
     def Lanczos(self):
         if self._Lanczos is None:
-            raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
+            raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff_IT() or Lanczos_coeff_MC() methods first.")
         return self._Lanczos
 
     @property
@@ -122,7 +127,7 @@ class LanczosQuantum:
     @property
     def K_dim(self) -> int:
         if self._K_dim is None:
-            raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
+            raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff_IT() or Lanczos_coeff_MC() methods first.")
         return self._K_dim
     
     @property
@@ -317,30 +322,27 @@ class LanczosQuantum:
                1.76594625])
         """
         if self._Lanczos is None:
-            raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
+            raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff_IT() or Lanczos_coeff_MC() methods first.")
 
         if self._a_coeff is None:
-            diagonals = [self._Lanczos, self._Lanczos]
-            L = sp.diags(diagonals, offsets = [- 1, 1], format='csr')
+            eigvals, eigvecs = eigh_tridiagonal(np.zeros(self._K_dim), self._Lanczos)
 
         else:
-            diagonals = [self._Lanczos, self._a_coeff, self._Lanczos]
-            L = sp.diags(diagonals, offsets = [- 1, 0, 1], format='csr')
-
-        initial_vec = np.zeros(self._K_dim)
-        initial_vec[0] = 1
+            eigvals, eigvecs = eigh_tridiagonal(self._a_coeff, self._Lanczos)
 
         n_points = int(t_max / dt) + 1
         time_grid = np.linspace(0, t_max, n_points)
-        K_wf = sp.linalg.expm_multiply(1j * L, initial_vec, start = 0, stop = t_max, num = n_points, endpoint = True)
-        abs_K_wf = np.abs(K_wf) ** 2
+
+        c0 = eigvecs[0, :]
+        phases = np.exp(1j * np.outer(time_grid, eigvals))
+        psi = (phases * c0) @ eigvecs.T     
+
+        prob = np.abs(psi) ** 2
+        K_C = prob @ np.arange(self._K_dim)
 
         if check:
-            if not np.allclose(np.sum(abs_K_wf, axis = 1), 1):
+            if not np.allclose(np.sum(prob, axis = 1), 1):
                 raise ValueError("The wavefunction is not normalized at all times.")
-        
-        n_vals = np.arange(self._K_dim)
-        K_C = abs_K_wf @ n_vals 
 
         return time_grid, K_C
     
@@ -369,21 +371,20 @@ class LanczosQuantum:
         np.float64(31.513263254008578)
         """
         if self._Lanczos is None:
-            raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff() method first.")
+            raise ValueError("Lanczos coefficients have not been computed yet. Please run the Lanczos_coeff_IT() or Lanczos_coeff_MC() methods first.")
         
         if self._a_coeff is None:
-            L = np.diag(self._Lanczos, -1) + np.diag(self._Lanczos, 1)
-        else:
-            L = np.diag(self._Lanczos, -1) + np.diag(self._a_coeff) + np.diag(self._Lanczos, 1)
+            _, eigvecs = eigh_tridiagonal(np.zeros(self._K_dim), self._Lanczos)
 
-        _, eigvec_L = np.linalg.eigh(L)
+        else:
+            _, eigvecs = eigh_tridiagonal(self._a_coeff, self._Lanczos)
 
         list_n = np.arange(self._K_dim)
 
         Q_0n = np.zeros(self._K_dim, dtype = np.float64)
 
         for n in range(self._K_dim):
-            transit = (np.abs(eigvec_L[0]) ** 2) * (np.abs(eigvec_L[n]) ** 2)
+            transit = (np.abs(eigvecs[0]) ** 2) * (np.abs(eigvecs[n]) ** 2)
             Q_0n[n] = np.sum(transit)
 
         LT_C_K = np.dot(Q_0n, list_n)

@@ -125,9 +125,13 @@ EWindow = ELMG[[idx]];
 nWindow = nLMG[[idx]];
 sizeWindow = Length[EWindow];
 
-f[x_,y_,z_] := Total[Table[ic[[i,1]] MatrixPower[x,i] + ic[[i,2]] MatrixPower[y,i]  + ic[[i,3]] MatrixPower[z,i] ,{i,1,Length[ic]}]]
-initialOpTransit = f[sx, sy, sz];
-If[onePoint == 1, initialOp = initialOpTransit - IPMC[nWindow, sizeWindow, IdentityMatrix[2 S+1], initialOpTransit, p] IdentityMatrix[2 S + 1], initialOp = initialOpTransit]
+lengthIC = Length[ic];
+constructIC[{coeff_, type_, exp_}]:= Module[
+{op},
+op = Switch[type, 0, Id, 1, sx, 2, sy, 3, sz];
+coeff * MatrixPower[op, exp]
+]
+initialOp = Total[Table[constructIC[ic[[i]]], {i, 1, lengthIC}]];
  
 {KdimMC, LanczosMC, aMC} = LanczosAlgoMC[HLMG, initialOp, 2 S + 1, nWindow, sizeWindow, 10^(-50), p];
 {KdimMC, LanczosMC[[;;KdimMC + 1]], aMC[[;;KdimMC + 1]]} (* Output loaded by the Python code *)

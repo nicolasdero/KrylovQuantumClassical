@@ -103,11 +103,17 @@ sx = SetPrecision[sx / S, p];
 sy = SetPrecision[sy / S, p];
 sz = SetPrecision[sz / S, p];
 
+Id = IdentityMatrix[2 S + 1];
 HLMG = -(J/2) sz . sz - h sx;
 HLMG = SetPrecision[HLMG, p]
 
-f[x_,y_,z_] := Total[Table[ic[[i,1]] MatrixPower[x,i] + ic[[i,2]] MatrixPower[y,i]  + ic[[i,3]] MatrixPower[z,i] ,{i,1,Length[ic]}]]
-initialOp = f[sx, sy, sz];
+lengthIC = Length[ic];
+constructIC[{coeff_, type_, exp_}]:= Module[
+{op},
+op = Switch[type, 0, Id, 1, sx, 2, sy, 3, sz];
+coeff * MatrixPower[op, exp]
+]
+initialOp = Total[Table[constructIC[ic[[i]]], {i, 1, lengthIC}]];
 
 {Kdim, Lanczos} = LanczosAlgo[HLMG, initialOp, 2 S + 1, 10^(-50), p];
 {Kdim, Lanczos[[;;Kdim + 1]]} (* Output loaded by the Python code *)

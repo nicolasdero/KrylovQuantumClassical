@@ -52,3 +52,33 @@ def spin_operators(S: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     Sz = np.diag(M_list)
 
     return Sx, Sy, Sz
+
+def identity_operator(D: int) -> np.ndarray:
+    """
+    This function returns the identity operator in the spin-S representation.
+
+    Parameters
+    ----------
+    D: int
+        The dimension of the Hilbert space, which is given by D = 2 * S + 1, where S is the angular momentum quantum number.
+
+    Returns
+    -------
+    I: numpy.ndarray
+        Identity operator in the D-dimensional Hilbert space, which is a D x D matrix with 1's on the diagonal and 0's elsewhere.
+        
+    Example
+    -------
+    >>> util.identity_operator(2)
+    [[1.+0.j 0.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     [0.+0.j 1.+0.j 0.+0.j 0.+0.j 0.+0.j]
+     [0.+0.j 0.+0.j 1.+0.j 0.+0.j 0.+0.j]
+     [0.+0.j 0.+0.j 0.+0.j 1.+0.j 0.+0.j]
+     [0.+0.j 0.+0.j 0.+0.j 0.+0.j 1.+0.j]]
+    """
+    if D < 1 or not isinstance(D, int):
+        raise ValueError("D must be a positive integer.")
+
+    I = np.eye(D, dtype = np.complex128)
+
+    return I
