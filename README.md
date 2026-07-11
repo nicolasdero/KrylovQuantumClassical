@@ -15,6 +15,11 @@ In this article, we study and build the framework of classical Krylov complexity
   <img src="https://github.com/Climdyn/Pydlosky/blob/main/Animation/K_complexity_evolution.gif?raw=true" height="320" /> 
 </p>
 
+<p float="left">
+  <img src="https://github.com/nicolasdero/KrylovQuantumClassical/blob/main/Animation/Lanczos_animation.gif?raw=true" height="320" />
+  <img src="https://github.com/nicolasdero/KrylovQuantumClassical/blob/main/Animation/K_complexity_evolution.gif?raw=true" height="320" /> 
+</p>
+
 ## General information
 
 KrylovQuantumClassical includes various Python classes to define the quantum and classical LMG and FP as well as infinite-temperature ad microcanonical classical and quantum Lanczos algorithm in the [`KrylovQuantumClassical`](./KrylovQuantumClassical) folder. Some of the classes rely on [spherical](https://doi.org/10.5281/zenodo.4045222) to perform efficient heavy computations involving spherical harmonics. 
