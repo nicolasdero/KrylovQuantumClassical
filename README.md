@@ -11,8 +11,8 @@ KrylovQuantumClassical is the software developed for the numerical computations 
 In this article, we study and build the framework of classical Krylov complexity, and analyze its connection with the well-known quantum Krylov complexity. We construct a formal semiclassical relation between the classical and quantum regimes, that we name <i>Krylov-Ehrenfest theorem</i>. We also explore microcanonical Krylov complexity for which the Krylov dynamics unfolds within fixed energy shells. We apply these notions to the Lipkin-Meshkov-Glick (LMG) and Feingold-Peres (FP) models. 
 
 <p float="left">
-  <img src="https://github.com/nicolasdero/KrylovQuantumClassical/blob/main/Animation/Lanczos_animation.gif?raw=true" height="250" />
-  <img src="https://github.com/nicolasdero/KrylovQuantumClassical/blob/main/Animation/K_complexity_evolution.gif?raw=true" height="250" /> 
+  <img src="https://github.com/nicolasdero/KrylovQuantumClassical/blob/main/Animation/Lanczos_animation.gif?raw=true" height="275" />
+  <img src="https://github.com/nicolasdero/KrylovQuantumClassical/blob/main/Animation/K_complexity_evolution.gif?raw=true" height="275" /> 
 </p>
 
 ## General information
