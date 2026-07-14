@@ -2,6 +2,7 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21337091.svg)](https://doi.org/10.5281/zenodo.21337091)
 
+
 KrylovQuantumClassical is the software used for the numerical computations presented in the article:
 
 > <i>From phase space to Krylov space, one shell at a time</i>, De Ro, N., Sánchez-Garrido, A., and Sonner, J. (2026). [[preprint](https://arxiv.org/abs/)]
