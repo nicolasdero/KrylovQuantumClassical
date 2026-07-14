@@ -1,6 +1,6 @@
 # KrylovQuantumClassical
 
-[![DOI](https://zenodo.org/badge/DOI/)](https://doi.org/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21337091.svg)](https://doi.org/10.5281/zenodo.21337091)
 
 KrylovQuantumClassical is the software used for the numerical computations presented in the article:
 
